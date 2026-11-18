@@ -7,7 +7,10 @@ export function toolDetail(input: any): string {
   if (!input || typeof input !== 'object') return '';
   const d = input.command ?? input.file_path ?? input.absolute_path ?? input.path ?? input.dir_path
     ?? input.pattern ?? input.url ?? input.query ?? input.description;
-  return typeof d === 'string' ? d : JSON.stringify(input);
+  if (typeof d === 'string') return d;
+  // Unknown schema (e.g. agy's PascalCase CommandLine / AbsolutePath): first string value.
+  const firstString = Object.values(input).find((v) => typeof v === 'string');
+  return typeof firstString === 'string' ? firstString : JSON.stringify(input);
 }
 
 export function oneLine(s: string, max = 120): string {

@@ -1,6 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import type { AgentAdapter, AgentEvent, LineParser } from './types.ts';
 import { npmCommand, oneLine, toolDetail, versionOf } from './util.ts';
 
@@ -79,13 +76,8 @@ export const gemini: AgentAdapter = {
 
   setupHint() {
     if (process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_USE_VERTEXAI || process.env.GOOGLE_GENAI_USE_GCA) return null;
-    const dir = join(homedir(), '.gemini');
-    if (existsSync(join(dir, 'oauth_creds.json'))) return null;
-    try {
-      const s = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8'));
-      if (s?.security?.auth?.selectedType) return null;
-    } catch { /* no settings yet */ }
-    return 'not signed in: run `gemini` once and log in with Google (free tier)';
+    // Google stopped serving Gemini CLI for free and AI Pro/Ultra users on 2026-06-18.
+    return 'retired for free/Pro accounts since 2026-06-18 (paid API keys still work). Use -a agy instead';
   },
 
   command(o) {

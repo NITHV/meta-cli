@@ -36,7 +36,8 @@ type stripping, and state lives in `.meta/meta.db` (built-in `node:sqlite`).
 
 - [x] `run`, `diff`, `apply`, `discard`, `show`, `runs`
 - [x] `race` with a concurrency cap, `stats` per agent:model
-- [x] `gemini` adapter (headless stream-json; run `gemini` once to sign in)
+- [x] `agy` adapter for Antigravity CLI (Google's Gemini CLI replacement; sign in once with `agy`)
+- [x] `gemini` adapter (paid API keys only: retired for free/Pro accounts on 2026-06-18)
 - [ ] `codex` adapter
 - [ ] Ink TUI
 - [ ] `meta serve`: the same core over HTTP for an IDE/phone UI

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { gemini } from '../src/agents/gemini.ts';
 import { claude } from '../src/agents/claude.ts';
+import { agy } from '../src/agents/agy.ts';
 import type { AgentEvent } from '../src/agents/types.ts';
 
 function feed(lines: object[], p = gemini.parser()): AgentEvent[] {
@@ -59,6 +60,54 @@ test('parsers are independent per run', () => {
 
 test('gemini: rejects unsafe model names', () => {
   assert.throws(() => gemini.command({ task: 't', cwd: '.', yolo: false, model: 'x & calc' }), /invalid model/);
+});
+
+// Shapes follow the examples in antigravity.google/docs/cli/headless.
+const step = (s: object) => ({ event: 'step_update', step_update: { conversation_id: 'c1', ...s } });
+
+test('agy: init, streamed text, tool call and result', () => {
+  const ev = feed([
+    { event: 'init', conversation_id: 'c1', init: { cwd: '.', tools: [], permission_mode: 'request-review' } },
+    step({ step_index: 0, state: 'DONE', step_type: 'user_input' }),
+    step({ step_index: 1, state: 'ACTIVE', step_type: 'agent_response', text_delta: 'Running ' }),
+    step({ step_index: 1, state: 'DONE', step_type: 'agent_response', text_delta: 'echo\n' }),
+    step({ step_index: 2, state: 'ACTIVE', step_type: 'tool', tool_name: 'run_command',
+      tool_info: { name: 'run_command', parameters: { CommandLine: 'echo hi' } } }),
+    step({ step_index: 2, state: 'DONE', step_type: 'tool', tool_name: 'run_command',
+      tool_info: { name: 'run_command', parameters: { CommandLine: 'echo hi' }, output: 'hi\r\n' } }),
+    { event: 'result', result: { conversation_id: 'c1', status: 'SUCCESS', response: 'Done.', duration_seconds: 2.5, num_turns: 3 } },
+  ], agy.parser());
+  assert.deepEqual(ev, [
+    { kind: 'start', sessionId: 'c1', model: undefined },
+    { kind: 'text', text: 'Running echo' },
+    { kind: 'tool', name: 'run_command', detail: 'echo hi' },
+    { kind: 'tool_result', ok: true, preview: 'hi' },
+    { kind: 'done', ok: true, summary: 'Done.', turns: 3, durationMs: 2500 },
+  ]);
+});
+
+test('agy: tool step reported only as DONE still yields call + result', () => {
+  const ev = feed([
+    step({ step_index: 4, state: 'DONE', step_type: 'tool',
+      tool_info: { name: 'write_to_file', parameters: { TargetFile: 'add.js' }, error: { type: 'X', message: 'denied' } } }),
+  ], agy.parser());
+  assert.deepEqual(ev, [
+    { kind: 'tool', name: 'write_to_file', detail: 'add.js' },
+    { kind: 'tool_result', ok: false, preview: 'denied' },
+  ]);
+});
+
+test('agy: failed result', () => {
+  const ev = feed([{ event: 'result', result: { status: 'INTERRUPTED', num_turns: 1 } }], agy.parser());
+  assert.equal(ev.length, 1);
+  assert.equal((ev[0] as any).ok, false);
+  assert.equal((ev[0] as any).summary, 'INTERRUPTED');
+});
+
+test('agy: uses accept-edits by default and skip-permissions with yolo', () => {
+  if (!agy.detect()) return; // command() needs the binary; parser tests above cover the rest
+  assert.ok(agy.command({ task: 't', cwd: '.', yolo: false }).args.includes('--mode=accept-edits'));
+  assert.ok(agy.command({ task: 't', cwd: '.', yolo: true }).args.includes('--dangerously-skip-permissions'));
 });
 
 test('claude: maps result line', () => {
