@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' app: data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self'">
+  <title>meta</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="titlebar">
+    <div class="brand">
+      <div class="logo">m</div>
+      <button id="projectBtn" class="nodrag project" title="Switch project"><span id="projectName">meta</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div id="tabs" class="nodrag"></div>
+    <div class="newgroup nodrag">
+      <button id="newClaude" class="primary" title="New Claude session (Ctrl+T)">
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        Claude
+      </button>
+      <button id="newMenuBtn" class="icon" aria-label="More session options">
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="spacer"></div>
+    <button id="searchBtn" class="nodrag search" title="Open file (Ctrl+P)">
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4.3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m9.3 9.3 3.2 3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <kbd>Ctrl P</kbd>
+    </button>
+    <div class="overlay-space"></div>
+  </header>
+
+  <div id="body">
+    <aside id="sidebar">
+      <div class="side-head"><span>FILES</span><span id="changedCount" class="accent"></span></div>
+      <div id="tree" class="scroll"></div>
+      <div class="side-section">
+        <div class="side-head"><span>SESSIONS</span></div>
+        <div id="sessionList"></div>
+      </div>
+      <div class="side-section">
+        <div class="side-head"><span>TOKENS</span></div>
+        <div id="tokenPanel" class="tokens"></div>
+      </div>
+    </aside>
+
+    <main id="terminals">
+      <div id="noSession" class="empty" hidden>
+        <p>No sessions yet.</p>
+        <button id="emptyNew" class="primary big">+ New Claude session</button>
+        <p class="muted">Ctrl+T any time</p>
+      </div>
+    </main>
+
+    <div id="resizer" title="Drag to resize" hidden></div>
+
+    <section id="reader" hidden>
+      <div class="reader-head">
+        <span id="readerTitle"></span>
+        <span id="readerMeta" class="muted"></span>
+        <span class="spacer"></span>
+        <div id="viewToggle" class="seg" role="group" aria-label="View mode" hidden>
+          <button data-mode="read" class="on">Read</button>
+          <button data-mode="source">Source</button>
+        </div>
+        <button id="mentionBtn" class="ghost small" title="Mention this file in the active Claude session">@ Mention</button>
+        <button id="closeReader" class="icon" aria-label="Close file">✕</button>
+      </div>
+      <article id="mdView" class="markdown scroll"></article>
+      <div id="codeView"></div>
+    </section>
+  </div>
+
+  <footer id="statusbar">
+    <span id="sbSessions"></span>
+    <span id="sbNeeds" class="needs"></span>
+    <span id="sbTokens" title="Tokens: input + output + cache writes. Cache reads shown in the Tokens panel."></span>
+    <span class="spacer"></span>
+    <span>Ctrl+T new Claude</span>
+    <span>Ctrl+P open file</span>
+    <span>Ctrl+B files</span>
+    <span>Ctrl+\ reader</span>
+  </footer>
+
+  <div id="start" class="start" hidden>
+    <div class="start-card">
+      <div class="logo big">m</div>
+      <h1>meta</h1>
+      <p class="muted">Open a project to start Claude sessions in it.</p>
+      <button id="openFolder" class="primary big">Open folder…</button>
+      <div id="recentList" class="recent"></div>
+    </div>
+  </div>
+
+  <div id="quick" class="modal" hidden>
+    <div class="quick-card" role="dialog" aria-label="Open file">
+      <label class="quick-input">
+        <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4.3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m9.3 9.3 3.2 3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <input id="quickInput" placeholder="Search files by name" aria-label="File name" autocomplete="off" spellcheck="false">
+        <kbd>Esc</kbd>
+      </label>
+      <div id="quickList"></div>
+      <div class="quick-foot"><span>Enter open</span><span>Alt+Enter mention in Claude</span></div>
+    </div>
+  </div>
+
+  <div id="menu" class="menu" hidden></div>
+  <div id="toast" hidden></div>
+
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="../node_modules/mermaid/dist/mermaid.min.js"></script>
+  <!-- Monaco's AMD loader last: scripts after it would register as AMD modules, not globals -->
+  <script src="../node_modules/monaco-editor/min/vs/loader.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

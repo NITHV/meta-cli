@@ -1,4 +1,8 @@
 import { parseArgs, styleText } from 'node:util';
+import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { adapters } from './agents/index.ts';
 import type { AgentEvent } from './agents/types.ts';
 import { openStore } from './store.ts';
@@ -19,7 +23,8 @@ Usage:
   meta apply <run>                   Squash a run's changes into your working tree (staged)
   meta discard <run>                 Delete a run's worktree and branch
   meta stats                         Success and keep rate per agent
-  meta serve                         Open the web IDE for this repo
+  meta ide [folder]                  Open the desktop IDE (Claude tabs, files, Markdown reader)
+  meta serve                         Open the older web IDE for this repo
 
 Options:
   -a, --agent <name>   Agent (default: claude). Repeat for race: -a claude:haiku -a claude:sonnet
@@ -220,6 +225,20 @@ function cmdDiscard(ref: string): number {
   return 0;
 }
 
+/** Launch the desktop IDE (app/) on a folder, detached from this terminal. */
+function openIde(dir?: string): number {
+  const appDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'app');
+  const exe = join(appDir, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
+  if (!existsSync(exe)) throw new Error(`the IDE isn't installed yet: run npm install in ${appDir}`);
+  const target = resolve(dir ?? process.cwd());
+  if (!existsSync(target)) throw new Error(`no such folder: ${target}`);
+  const env = { ...process.env };
+  delete env.ELECTRON_RUN_AS_NODE;
+  spawn(exe, [appDir, target], { detached: true, stdio: 'ignore', env }).unref();
+  console.log(dim(`opening meta IDE on ${target}`));
+  return 0;
+}
+
 async function main(): Promise<number> {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -253,6 +272,7 @@ async function main(): Promise<number> {
     case 'race': return cmdRace(rest.join(' '), o);
     case 'runs': return cmdRuns();
     case 'stats': return cmdStats();
+    case 'ide': return openIde(rest[0]);
     case 'serve': return serve({
       port: Number.parseInt(values.port as string, 10) || 4321,
       host: values.lan ? '0.0.0.0' : '127.0.0.1',

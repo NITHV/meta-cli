@@ -1,5 +1,29 @@
 ﻿# meta-cli
 
+## meta IDE (desktop)
+
+A terminal-first desktop app around Claude Code: Claude session tabs, a live file
+tree, a Markdown reader with Mermaid diagrams and copy buttons, a code viewer,
+Ctrl+P quick open, status dots (working / needs you / done) and a token tracker.
+
+```powershell
+cd app; npm install --allow-scripts=electron; cd ..   # once
+meta ide                      # open the IDE on the current folder
+meta ide D:\path\to\project
+```
+
+Keys: Ctrl+T new Claude · Ctrl+Shift+T PowerShell · Ctrl+1–9 / Ctrl+Tab switch ·
+Ctrl+P open file (Alt+Enter mentions it in Claude) · Ctrl+B files · Ctrl+\ reader ·
+Ctrl+Shift+W close tab · right-click a file for "Start Claude on this file".
+
+How it works: each tab is a real terminal (node-pty + xterm.js) running `claude`
+with a fixed `--session-id`, so tabs come back after a restart via `--resume`;
+paused tabs use no RAM until clicked. Status comes from Claude Code hooks
+(`--settings` with a hooks file) that ping the app over localhost. Tokens are read
+from Claude's own logs in `~/.claude/projects`, so tracking is free and local.
+
+## CLI
+
 CLI-first orchestrator for coding agents. Each run gets its own git worktree, so
 agents never touch your working tree until you `apply`.
 

@@ -1,0 +1,21 @@
+{
+  "name": "meta-ide",
+  "version": "0.1.0",
+  "private": true,
+  "description": "meta IDE: a terminal-first desktop app around Claude Code sessions",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@lydell/node-pty": "1.2.0-beta.18",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "electron": "45.3.4",
+    "highlight.js": "11.12.0",
+    "markdown-it": "15.0.3",
+    "mermaid": "12.3.0",
+    "monaco-editor": "0.57.0"
+  }
+}
