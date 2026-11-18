@@ -22,7 +22,16 @@ const STATE_FILE = () => path.join(app.getPath('userData'), 'state.json');
 let state = { recent: [], project: null, sessions: [], active: {} };
 
 function loadState() {
-  try { state = { ...state, ...JSON.parse(fs.readFileSync(STATE_FILE(), 'utf8')) }; } catch { /* first run */ }
+  let raw = null;
+  try { raw = fs.readFileSync(STATE_FILE(), 'utf8'); } catch { /* first run */ }
+  if (raw != null) {
+    try {
+      state = { ...state, ...JSON.parse(raw.replace(/^﻿/, '')) }; // tolerate a BOM from editors/PowerShell
+    } catch {
+      // Never silently replace a file we couldn't read: keep a copy for recovery.
+      fs.copyFileSync(STATE_FILE(), STATE_FILE().replace(/\.json$/, `.unreadable-${Date.now()}.json`));
+    }
+  }
   state.recent = state.recent.filter((p) => fs.existsSync(p));
   for (const q of state.queue ?? []) if (q.status === 'running') { q.status = 'failed'; q.summary = 'interrupted: the app was closed'; }
   if (state.project && !fs.existsSync(state.project)) state.project = null;
@@ -32,7 +41,11 @@ function saveState() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     fs.mkdirSync(path.dirname(STATE_FILE()), { recursive: true });
-    fs.writeFileSync(STATE_FILE(), JSON.stringify(state, null, 2));
+    // Atomic save: write a temp file, then rename over the old one, so a crash mid-write
+    // can't leave a half-written state file.
+    const tmp = STATE_FILE() + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
+    fs.renameSync(tmp, STATE_FILE());
   }, 200);
 }
 /** Where a session's process runs: its own git worktree when isolated, else the project. */
