@@ -1,0 +1,13 @@
+{
+  "name": "meta-cli",
+  "version": "0.1.0",
+  "description": "CLI-first orchestrator for coding agents: run any agent in an isolated git worktree, review, apply.",
+  "type": "module",
+  "bin": {
+    "meta": "bin/meta.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "license": "MIT"
+}
