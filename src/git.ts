@@ -56,6 +56,28 @@ export function changedFiles(root: string, base: string, branch: string): string
   return out ? out.split('\n') : [];
 }
 
+/** Tracked + untracked (not ignored) files, forward-slash paths relative to root. */
+export function listFiles(root: string): string[] {
+  return execFileSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], {
+    cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+  }).split('\0').filter(Boolean);
+}
+
+/** File content at a revision, or null if it doesn't exist there. Not trimmed. */
+export function showFile(root: string, rev: string, path: string): string | null {
+  try {
+    return execFileSync('git', ['show', `${rev}:${path}`], {
+      cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return null;
+  }
+}
+
+export function shortHead(root: string): string {
+  return git(root, 'rev-parse', '--short', 'HEAD');
+}
+
 export function shortstat(root: string, base: string, branch: string): string {
   return git(root, 'diff', '--shortstat', base, branch);
 }

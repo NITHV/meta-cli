@@ -1,6 +1,6 @@
 import { getAdapter } from './agents/index.ts';
 import type { AgentAdapter, AgentEvent } from './agents/types.ts';
-import type { RunStatus, Store } from './store.ts';
+import type { RunRow, RunStatus, Store } from './store.ts';
 import * as git from './git.ts';
 import { execute } from './runner.ts';
 
@@ -83,6 +83,24 @@ export async function runOne(
     turns: result.done?.turns,
     durationMs: Date.now() - t0,
   };
+}
+
+/** Squash a run into the working tree (staged). Returns the other open runs from its race. */
+export function applyRun(root: string, store: Store, run: RunRow): RunRow[] {
+  if (run.status === 'applied' || run.status === 'discarded') throw new Error(`run ${run.id} is already ${run.status}`);
+  if (run.status === 'running') throw new Error(`run ${run.id} is still running`);
+  if (git.squashInto(root, run.branch) !== 0) throw new Error('merge failed; resolve conflicts, then discard the run');
+  git.remove(root, run.worktree, run.branch);
+  store.setStatus(run.id, 'applied');
+  return run.race_id
+    ? store.listRuns().filter((r) => r.race_id === run.race_id && r.id !== run.id && r.status !== 'discarded' && r.status !== 'applied')
+    : [];
+}
+
+export function discardRun(root: string, store: Store, run: RunRow): void {
+  if (run.status === 'running') throw new Error(`run ${run.id} is still running`);
+  git.remove(root, run.worktree, run.branch);
+  if (run.status !== 'applied') store.setStatus(run.id, 'discarded');
 }
 
 /** Run tasks with at most `max` in flight: a cap on concurrent agents (RAM is the limit). */

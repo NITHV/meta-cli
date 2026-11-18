@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>meta IDE</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header id="topbar">
+    <span class="brand">meta</span>
+    <span id="repo"></span>
+    <span id="head" class="muted"></span>
+    <span class="spacer"></span>
+    <span id="conn" class="dot" title="live updates"></span>
+  </header>
+
+  <main id="layout">
+    <aside id="left">
+      <section class="pane grow">
+        <h2>Files <button id="refresh" class="icon" title="Refresh">↻</button></h2>
+        <div id="tree" class="scroll"></div>
+      </section>
+      <section class="pane">
+        <h2>Runs</h2>
+        <div id="runs" class="scroll"></div>
+      </section>
+    </aside>
+
+    <section id="center">
+      <div id="tabs"></div>
+      <div id="diffbar" hidden>
+        <button id="backToEditor" class="ghost">← Editor</button>
+        <span id="diffTitle"></span>
+      </div>
+      <div id="editor"></div>
+      <div id="diff" hidden></div>
+      <div id="empty">
+        <p><strong>Open a file</strong> from Files, or <strong>ask Claude Code</strong> what to do.</p>
+        <p class="muted">Select code and press <kbd>Ctrl</kbd>+<kbd>I</kbd> to ask about it.</p>
+      </div>
+    </section>
+
+    <aside id="right">
+      <form id="ask">
+        <textarea id="task" rows="5" placeholder="Ask Claude Code to… (Ctrl+Enter to run)"></textarea>
+        <div id="agents" class="chips"></div>
+        <label class="row"><input type="checkbox" id="withFile" checked> Mention the open file</label>
+        <label class="row"><input type="checkbox" id="yolo"> YOLO: allow shell commands</label>
+        <button id="go" type="submit">Run</button>
+        <p id="dirtyNote" class="note" hidden>You have uncommitted changes. Agents start from your last commit, so they won't see them.</p>
+      </form>
+      <div id="runview" class="scroll"></div>
+    </aside>
+  </main>
+
+  <div id="toast" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

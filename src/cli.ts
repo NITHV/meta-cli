@@ -1,9 +1,10 @@
 import { parseArgs, styleText } from 'node:util';
 import { adapters } from './agents/index.ts';
 import type { AgentEvent } from './agents/types.ts';
-import { openStore, type RunRow } from './store.ts';
+import { openStore } from './store.ts';
 import * as git from './git.ts';
-import { label, newId, parseSpecs, pool, runOne, type RunOutcome } from './run.ts';
+import { applyRun, discardRun, label, newId, parseSpecs, pool, runOne, type RunOutcome } from './run.ts';
+import { serve } from './server.ts';
 import { ago, bold, dim, green, printEvent, red } from './fmt.ts';
 
 const HELP = `meta: run coding agents in isolated git worktrees
@@ -18,6 +19,7 @@ Usage:
   meta apply <run>                   Squash a run's changes into your working tree (staged)
   meta discard <run>                 Delete a run's worktree and branch
   meta stats                         Success and keep rate per agent
+  meta serve                         Open the web IDE for this repo
 
 Options:
   -a, --agent <name>   Agent (default: claude). Repeat for race: -a claude:haiku -a claude:sonnet
@@ -26,6 +28,9 @@ Options:
       --max <n>        Race: max agents running at once (default: 2)
       --yolo           Let agents run any tool without asking (bypass permissions)
       --json           Print events as NDJSON
+      --port <n>       serve: port (default 4321)
+      --lan            serve: also listen on your Wi-Fi so a phone can connect
+      --no-open        serve: don't open the browser
   -h, --help           Show this help
 
 <run> is a run id or a unique prefix of one.
@@ -200,28 +205,17 @@ function cmdApply(ref: string): number {
   const root = git.root(process.cwd());
   const store = openStore(root);
   const run = store.findRun(ref);
-  if (run.status === 'applied' || run.status === 'discarded') throw new Error(`run ${run.id} is already ${run.status}`);
-  if (run.status === 'running') throw new Error(`run ${run.id} is still running`);
-  const code = git.squashInto(root, run.branch);
-  if (code !== 0) throw new Error('merge failed; resolve conflicts, then run `meta discard` when done');
-  git.remove(root, run.worktree, run.branch);
-  store.setStatus(run.id, 'applied');
+  const rivals = applyRun(root, store, run);
   console.log(green(`applied ${run.id}. changes are staged; review with \`git diff --cached\` and commit.`));
-  const rivals = run.race_id ? siblings(store.listRuns(), run) : [];
   if (rivals.length) console.log(dim(`other runs in this race: ${rivals.map((r) => r.id).join(' ')} (meta discard <id>)`));
   return 0;
-}
-
-function siblings(all: RunRow[], run: RunRow): RunRow[] {
-  return all.filter((r) => r.race_id === run.race_id && r.id !== run.id && r.status !== 'discarded' && r.status !== 'applied');
 }
 
 function cmdDiscard(ref: string): number {
   const root = git.root(process.cwd());
   const store = openStore(root);
   const run = store.findRun(ref);
-  git.remove(root, run.worktree, run.branch);
-  if (run.status !== 'applied') store.setStatus(run.id, 'discarded');
+  discardRun(root, store, run);
   console.log(dim(`discarded ${run.id}`));
   return 0;
 }
@@ -235,6 +229,9 @@ async function main(): Promise<number> {
       max: { type: 'string', default: '2' },
       yolo: { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
+      port: { type: 'string', default: '4321' },
+      lan: { type: 'boolean', default: false },
+      'no-open': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   });
@@ -256,6 +253,11 @@ async function main(): Promise<number> {
     case 'race': return cmdRace(rest.join(' '), o);
     case 'runs': return cmdRuns();
     case 'stats': return cmdStats();
+    case 'serve': return serve({
+      port: Number.parseInt(values.port as string, 10) || 4321,
+      host: values.lan ? '0.0.0.0' : '127.0.0.1',
+      open: !values['no-open'],
+    });
     case 'show': return cmdShow(needRef(), o);
     case 'diff': return cmdDiff(needRef());
     case 'apply': return cmdApply(needRef());

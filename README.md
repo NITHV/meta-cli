@@ -14,7 +14,15 @@ meta runs
 # same task, several agents in parallel, then keep the best
 meta race "add input validation to add()" -a claude:haiku -a claude:sonnet
 meta stats                   # success and keep rate per agent:model
+
+# the web IDE: files, Monaco editor, Claude Code panel, diff review, apply
+meta serve                   # opens http://localhost:4321 in your browser
+meta serve --lan             # also reachable from your phone on the same Wi-Fi
 ```
+
+In the IDE, select code and press **Ctrl+I** to send it to the agent with its
+file and line numbers. Runs stream live; **Review** opens a side-by-side diff
+and **Apply** stages the change in your repo.
 
 Requires Node 24+ and git. No dependencies: TypeScript runs directly via Node's
 type stripping, and state lives in `.meta/meta.db` (built-in `node:sqlite`).
@@ -35,6 +43,10 @@ type stripping, and state lives in `.meta/meta.db` (built-in `node:sqlite`).
   Free-tier Gemini models sometimes return 503 "no capacity": pick another with
   `-a agy:<model>` (list them with `agy models`).
 - **State**: every run and event is in SQLite, so `meta show <run>` can replay it.
+- **IDE server**: `meta serve` binds to localhost and requires a random token
+  (swapped for an HttpOnly SameSite=Strict cookie) plus an `X-Meta` header on
+  writes, so other web pages can't drive it (CSRF / DNS-rebinding defense).
+  Paths are confined to the repo; `.git` and `.meta` are off limits.
 - **Race**: contestants run through a worker pool capped by `--max` (default 2),
   so a laptop with little RAM isn't swamped. Runs in a race share a `race_id`.
 
@@ -44,6 +56,7 @@ type stripping, and state lives in `.meta/meta.db` (built-in `node:sqlite`).
 - [x] `race` with a concurrency cap, `stats` per agent:model
 - [x] `agy` adapter for Antigravity CLI (Google's Gemini CLI replacement; sign in once with `agy`)
 - [x] `gemini` adapter (paid API keys only: retired for free/Pro accounts on 2026-06-18)
-- [ ] `codex` adapter
-- [ ] Ink TUI
-- [ ] `meta serve`: the same core over HTTP for an IDE/phone UI
+- [x] `meta serve`: web IDE over the same core (REST + Server-Sent Events)
+- [ ] IDE: chat follow-ups on a run (Claude `--resume`), approve tool calls from the UI
+- [ ] IDE: integrated terminal, git commit panel
+- [ ] Backlog: agy over ACP, `codex` adapter, Ink TUI
