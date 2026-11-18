@@ -317,6 +317,21 @@ body.focus #sidebar, body.focus #reader, body.focus #resizer, body.focus #status
 #docsList { display: flex; flex-direction: column; gap: 6px; }
 .rchat:disabled { opacity: .5; cursor: default; }
 
+/* ---------- final batch: preview, doc, board, grouped sessions */
+.panel.preview { padding: 10px 12px; }
+#previewFrame { flex: 1; width: 100%; min-height: 0; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+#docBody .markdown { padding: 8px 4px 32px; }
+.board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.bcol { display: flex; flex-direction: column; gap: 8px; min-height: 120px; padding: 6px; border-radius: 8px; border: 1px dashed transparent; }
+.bcol.over { border-color: var(--accent); background: var(--accent-bg); }
+.bcard { background: var(--base); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; cursor: grab; }
+.bcard .btext { white-space: pre-wrap; color: var(--text); font-size: 13px; }
+.bcard .bmeta { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+.bcard .bactions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.bcard .gbtn { opacity: .7; }
+.sgroup { padding: 6px 14px 2px; font-size: 11px; color: var(--faint); letter-spacing: .04em; }
+#sessionList .srow.on .n { color: var(--text); font-weight: 600; }
+
 /* ---------- status bar */
 #statusbar { display: flex; align-items: center; gap: 16px; height: 28px; padding: 0 14px; background: var(--surface); border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); flex: none; }
 #statusbar .needs { color: var(--needs); }

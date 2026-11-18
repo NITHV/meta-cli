@@ -21,7 +21,10 @@ export function init(ctx) {
   function closePicker() { $('#palette').hidden = true; pick = null; S.sessions.get(S.active)?.term.focus(); }
   function renderPicker() {
     const q = $('#paletteInput').value.trim().toLowerCase();
-    pick.items = pick.all.filter((it) => !q || it.label.toLowerCase().includes(q) || (it.hint || '').toLowerCase().includes(q));
+    // Matches in the name rank above matches only in the hint (e.g. "live preview" should
+    // pick "Live preview…", not "Edit this file" whose hint mentions a live preview).
+    const rank = (it) => (!q ? 1 : it.label.toLowerCase().startsWith(q) ? 3 : it.label.toLowerCase().includes(q) ? 2 : (it.hint || '').toLowerCase().includes(q) ? 1 : 0);
+    pick.items = pick.all.map((it, i) => ({ it, r: rank(it), i })).filter((x) => x.r > 0).sort((a, b) => b.r - a.r || a.i - b.i).map((x) => x.it);
     pick.sel = Math.min(pick.sel, Math.max(0, pick.items.length - 1));
     $('#paletteList').replaceChildren(...pick.items.map((it, i) => {
       const b = el('button', { className: 'qrow' + (i === pick.sel ? ' sel' : '') },

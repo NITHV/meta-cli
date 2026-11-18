@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' app: data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self'">
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' app: data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self'; frame-src http://127.0.0.1:* http://localhost:*">
   <title>meta</title>
   <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="style.css">
@@ -140,6 +140,17 @@
         <label class="hook-field">When Claude needs you<input id="hook-needs" placeholder="e.g. a command that pings your phone"></label>
         <div class="git-actions"><span class="spacer"></span><button id="hooksSave" class="primary">Save hooks</button></div>
       </div>
+      <div id="phoneView" class="scroll panel" hidden><div id="phoneBody"></div></div>
+      <div id="previewView" class="panel preview" hidden>
+        <div class="git-actions"><button id="previewReload" class="ghost small">Reload</button><span class="spacer"></span><button id="previewOpen" class="ghost small">Open in browser</button></div>
+        <iframe id="previewFrame" title="Live preview" sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-modals"></iframe>
+        <p class="note">Reloads by itself when files change.</p>
+      </div>
+      <div id="docView" class="scroll panel" hidden><div id="docBody"></div></div>
+      <div id="boardView" class="scroll panel" hidden>
+        <form id="boardAdd" class="git-actions"><input id="boardText" class="perm-input" placeholder="An idea or task. Start Claude on it later." autocomplete="off"><button class="ghost small">Add</button></form>
+        <div id="boardCols" class="board"></div>
+      </div>
       <div id="portsView" class="scroll panel" hidden>
         <p class="note">Servers listening on a port that were started from one of your IDE terminals. Refreshes every few seconds.</p>
         <div id="portList"></div>
@@ -184,6 +195,7 @@
     <span id="sbNeeds" class="needs"></span>
     <span id="sbTokens" title="Tokens: input + output + cache writes. Cache reads shown in the Tokens panel."></span>
     <button id="sbCi" class="ci" hidden></button>
+    <button id="sbTests" class="ci" hidden title="Watch mode. Click for the output."></button>
     <span class="spacer"></span>
     <span>Ctrl+T new Claude</span>
     <span>Ctrl+P open file</span>

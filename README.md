@@ -22,6 +22,16 @@ searches files and past Claude chats (click a chat to resume it); **Ctrl+Shift+P
 inserts a saved prompt snippet; **Ctrl+Shift+G** opens source control (stage,
 diff, commit, push, and "Write message with Claude" using Haiku).
 
+Everything else is in the **Ctrl+K** command palette: isolated sessions (own
+branch + worktree, apply or open a PR), edit files with live Markdown preview,
+PDF export, notes per tab, prompt history (Ctrl+Shift+H), one prompt to several
+tabs + side-by-side compare, themes, layouts, permission rules, pinned context,
+dependency watch, secret guard on commit, CI status, offline dependency docs,
+templates, user hooks, ports, scripts, live preview, watch mode, voice typing
+(Ctrl+Shift+Space), today's recap, learning mode, the task board, and **phone
+access**: watch sessions and answer prompts from your phone on the same Wi-Fi
+(off by default; secret link; read-only share links per tab).
+
 Desktop and Start menu shortcuts: `powershell -ExecutionPolicy Bypass -File app\install-shortcuts.ps1`
 
 Keys: Ctrl+T new Claude · Ctrl+Shift+T PowerShell · Ctrl+1–9 / Ctrl+Tab switch ·

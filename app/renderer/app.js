@@ -2,11 +2,13 @@
 import { init as initFeatures } from './features.js';
 import { init as initContent } from './content.js';
 import { init as initDevtools } from './devtools.js';
+import { init as initExtras } from './extras.js';
 
 const api = window.meta;
 let F = null; // feature hooks from features.js, set in boot()
 let C = null; // content hooks from content.js (editing, themes, notes…), set in boot()
 let D = null; // dev tooling hooks from devtools.js (permissions, CI, pins…), set in boot()
+let X = null; // extras.js: phone, preview, watch mode, voice, recap, learning, board
 const $ = (s) => document.querySelector(s);
 const el = (tag, props = {}, ...kids) => {
   const n = Object.assign(document.createElement(tag), props);
@@ -55,7 +57,7 @@ const THEME = {
 function isAppShortcut(e) {
   if (!e.ctrlKey || e.altKey) return false;
   const k = e.key.toLowerCase();
-  if (e.shiftKey) return ['t', 'w', 'f', 'g', 'p', 'h'].includes(k);
+  if (e.shiftKey) return ['t', 'w', 'f', 'g', 'p', 'h', ' '].includes(k);
   return k === 't' || k === 'p' || k === 'b' || k === 'k' || k === '\\' || k === 'tab' || /^[1-9]$/.test(k);
 }
 
@@ -210,15 +212,26 @@ function renderSessions() {
   }));
   $('#tabs').querySelector('.active')?.scrollIntoView({ inline: 'nearest' });
 
-  $('#sessionList').replaceChildren(...list.map((s) => {
-    const st = s.info.status || 'paused';
-    const r = el('button', { className: 'srow' },
-      el('span', { className: 'dot ' + st }),
-      el('span', { className: 'n', textContent: s.info.name }),
-      el('span', { className: 't', textContent: st === 'needs' ? 'waiting' : STATUS_LABEL[st] }));
-    r.onclick = () => activate(s.info.id);
-    return r;
-  }));
+  // Sessions from every project, grouped; this project first. Clicking another project's
+  // session switches to that project.
+  const groups = new Map();
+  for (const s of [...S.sessions.values()].sort((a, b) => (a.info.project === S.project ? -1 : b.info.project === S.project ? 1 : 0))) {
+    if (!groups.has(s.info.project)) groups.set(s.info.project, []);
+    groups.get(s.info.project).push(s);
+  }
+  const multi = groups.size > 1;
+  $('#sessionList').replaceChildren(...[...groups].flatMap(([proj, items]) => [
+    multi ? el('div', { className: 'sgroup', textContent: base(proj) + (proj === S.project ? ' (open)' : '') }) : null,
+    ...items.map((s) => {
+      const st = s.info.status || 'paused';
+      const r = el('button', { className: 'srow' + (s.info.id === S.active ? ' on' : '') },
+        el('span', { className: 'dot ' + st }),
+        el('span', { className: 'n', textContent: s.info.name }),
+        el('span', { className: 't', textContent: st === 'needs' ? 'waiting' : STATUS_LABEL[st] }));
+      r.onclick = () => (s.info.project === S.project ? activate(s.info.id) : enterProject(s.info.project).then(() => activate(s.info.id)));
+      return r;
+    }),
+  ].filter(Boolean)));
   if (!list.length) $('#sessionList').append(el('div', { className: 'row muted', textContent: 'None yet' }));
   $('#noSession').hidden = list.length > 0 && !!S.active;
   if (!S.active || !S.sessions.has(S.active)) for (const x of S.sessions.values()) x.el.hidden = true;
@@ -364,7 +377,8 @@ function langFor(p) {
 }
 
 /** The reader shows one pane at a time. Files: md | code | diff. Panels: the rest. */
-const PANES = { md: '#mdView', code: '#codeView', diff: '#diffView', queue: '#queueView', search: '#searchView', git: '#gitView', timeline: '#timelineView', snippets: '#snippetsView', ports: '#portsView', notes: '#notesView', perms: '#permsView', docs: '#docsView', hooks: '#hooksView' };
+const PANES = { md: '#mdView', code: '#codeView', diff: '#diffView', queue: '#queueView', search: '#searchView', git: '#gitView', timeline: '#timelineView', snippets: '#snippetsView', ports: '#portsView', notes: '#notesView', perms: '#permsView', docs: '#docsView', hooks: '#hooksView',
+  phone: '#phoneView', preview: '#previewView', doc: '#docView', board: '#boardView' };
 const FILE_PANES = new Set(['md', 'code', 'diff']);
 function pane(name) {
   for (const [k, sel] of Object.entries(PANES)) $(sel).hidden = k !== name;
@@ -1072,6 +1086,7 @@ async function enterProject(dir, alreadySet = false) {
   refreshGit();
   F.renderScripts();
   D.projectEntered().then(renderTree);
+  X.projectEntered();
   if (target) activate(target.info.id);
   else { $('#noSession').hidden = false; renderChanges(); }
 }
@@ -1131,6 +1146,7 @@ function onKey(e) {
   if (e.shiftKey && k === 'g') return S.project && openGit();
   if (e.shiftKey && k === 'p') return openSnippetPicker();
   if (e.shiftKey && k === 'h') return C.openHistory();
+  if (e.shiftKey && k === ' ') return X.voice();
   if (k === 't') return newSession(e.shiftKey ? 'shell' : 'claude');
   if (k === 'w') return S.active && closeSession(S.active);
   if (k === 'p') return S.project && openQuick('open');
@@ -1150,7 +1166,7 @@ async function boot() {
     newSession, openQuick, openSearch, openGit, openSnippetPicker, openSnippetManager, openTimeline, openQueue,
     toggleSidebar, pickFolder, enterProject, openFile, renameActive, handoff, closeSession, dropSession,
     makeTerm, activate, estimateSize, projectSessions, openPanel, codeEditor: () => codeEditor,
-    extraCommands: () => [...C.commands(), ...D.commands()],
+    extraCommands: () => [...C.commands(), ...D.commands(), ...X.commands()],
   });
   C = initContent({
     S, api, $, el, toast, store, base, F,
@@ -1158,6 +1174,7 @@ async function boot() {
     codeEditor: () => codeEditor, baseTermTheme: THEME,
   });
   D = initDevtools({ S, api, $, el, toast, F, C, openPanel, openFile, renderTree, enterProject, newSession });
+  X = initExtras({ S, api, $, el, toast, F, C, base, openPanel, showReader, newSession, activate });
   document.addEventListener('keydown', onKey, true);
   document.addEventListener('pointerdown', (e) => { if (!$('#menu').hidden && !$('#menu').contains(e.target)) hideMenu(); });
   $('#newClaude').onclick = () => newSession('claude');
@@ -1199,6 +1216,7 @@ async function boot() {
     s.info.status = status;
     if (status !== 'paused') { s.info.running = true; s.info.asleep = false; }
     F.status(id, status, prev);
+    X.statusChanged();
     if (status === 'done' && id === S.active) C.renderStats();
     renderSessions();
   });
@@ -1219,8 +1237,10 @@ async function boot() {
     if (!$('#quick').hidden) renderQuick();
     scheduleChanges();
     scheduleGit();
+    X.filesChanged(touched);
   });
   api.onTokens((t) => { S.tokens = t; renderTokens(); });
+  api.onAppError((msg) => toast(`Something went wrong (logged to error.log): ${msg}`));
   api.onChanges(({ id }) => { if (id === S.active) { scheduleChanges(); renderTimeline(); } });
   api.onQueue((q) => { queue = q; renderQueue(); });
 

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>meta · phone</title>
+<link rel="icon" href="/icon.png">
+<link rel="stylesheet" href="/xterm.css">
+<style>
+  :root { --base:#0E0F12; --surface:#16181D; --raised:#1E2128; --line:#2A2E37; --text:#E6E8EE; --muted:#9AA1B2; --accent:#F28C4B; --ink:#1A0F08; --working:#E8B44A; --needs:#6AA8FF; --done:#4ECB8F; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--base); color: var(--text); font: 15px/1.4 system-ui, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--line); z-index: 2; }
+  .logo { width: 24px; height: 24px; border-radius: 7px; background: var(--accent); color: var(--ink); font-weight: 700; display: grid; place-items: center; }
+  header h1 { font-size: 16px; margin: 0; flex: 1; }
+  button { font: inherit; color: inherit; background: none; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; min-height: 44px; }
+  button.primary { background: var(--accent); color: var(--ink); border: 0; font-weight: 600; }
+  #list { padding: 8px 16px 24px; display: flex; flex-direction: column; gap: 8px; }
+  .s { display: flex; align-items: center; gap: 12px; text-align: left; width: 100%; background: var(--surface); }
+  .s .n { flex: 1; } .s .p { font-size: 12px; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.working { background: var(--working); } .dot.done { background: var(--done); }
+  .dot.needs { background: var(--needs); box-shadow: 0 0 0 4px rgba(106,168,255,.25); }
+  .dot.paused, .dot.idle { background: transparent; border: 2px solid var(--muted); }
+  .st { font-size: 12px; color: var(--muted); } .st.needs { color: var(--needs); font-weight: 600; }
+  #view { display: none; flex-direction: column; height: 100%; }
+  #view.on { display: flex; }
+  #termWrap { flex: 1; overflow: auto; padding: 8px; background: var(--base); }
+  #term { transform-origin: top left; }
+  #text { flex: 1; overflow: auto; margin: 0; padding: 12px 14px; font: 13px/1.45 ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: pre-wrap; word-break: break-word; color: #D4D8E1; }
+  body.textmode #termWrap { position: absolute; left: -10000px; top: 0; width: 2000px; height: 800px; overflow: hidden; }
+  body:not(.textmode) #text { display: none; }
+  #mode { font-size: 13px; padding: 6px 10px; min-height: 36px; }
+  #bar { padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  #keys { display: flex; gap: 6px; overflow-x: auto; }
+  #keys button { min-width: 48px; padding: 8px 10px; }
+  #send { display: flex; gap: 8px; }
+  #send input { flex: 1; min-width: 0; background: var(--base); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; }
+  .note { color: var(--muted); font-size: 13px; padding: 0 16px; }
+  #readonly { display: none; text-align: center; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+  <div id="home">
+    <header><div class="logo">m</div><h1>Sessions</h1></header>
+    <p class="note" id="hint">Tap a session to watch it. Blue means it needs you.</p>
+    <div id="list"></div>
+  </div>
+
+  <div id="view">
+    <header><button id="back" aria-label="Back">←</button><h1 id="title"></h1><span id="vstatus" class="st"></span><button id="mode" title="Switch between readable text and the exact terminal screen">Screen</button></header>
+    <pre id="text"></pre>
+    <div id="termWrap"><div id="term"></div></div>
+    <div id="bar">
+      <div id="readonly">Read-only link: you can watch, not type.</div>
+      <div id="keys">
+        <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+        <button data-key="enter">Enter</button><button data-key="esc">Esc</button>
+        <button data-key="up">↑</button><button data-key="down">↓</button><button data-key="ctrlc">Ctrl+C</button>
+      </div>
+      <form id="send"><input id="msg" placeholder="Type to Claude…" autocomplete="off"><button class="primary">Send</button></form>
+    </div>
+  </div>
+
+<script src="/xterm.js"></script>
+<script>
+  const share = location.pathname.startsWith('/s/') ? location.pathname.slice(3) : '';
+  const q = (p) => share ? p + (p.includes('?') ? '&' : '?') + 's=' + share : p;
+  const $ = (s) => document.querySelector(s);
+  const LABEL = { working: 'working', needs: 'needs you', done: 'done', idle: 'idle', paused: 'not running' };
+  let me = { full: false }, sessions = [], current = null, es = null, term = null;
+
+  async function load() {
+    me = await (await fetch(q('/api/me'))).json();
+    sessions = await (await fetch(q('/api/sessions'))).json();
+    if (me.session) return open(me.session);
+    render();
+  }
+  function render() {
+    $('#list').replaceChildren(...sessions.map((s) => {
+      const b = document.createElement('button');
+      b.className = 's';
+      b.innerHTML = '<span class="dot"></span><span class="n"></span><span class="st"></span>';
+      b.querySelector('.dot').classList.add(s.status);
+      b.querySelector('.n').textContent = s.name;
+      const p = document.createElement('div'); p.className = 'p'; p.textContent = s.project; b.querySelector('.n').append(p);
+      const st = b.querySelector('.st'); st.textContent = LABEL[s.status] || s.status; if (s.status === 'needs') st.classList.add('needs');
+      b.onclick = () => open(s.id);
+      return b;
+    }));
+    if (!sessions.length) $('#list').textContent = 'No sessions yet.';
+  }
+  function fit() {
+    if (!term) return;
+    const w = $('#termWrap').clientWidth - 16;
+    const natural = term.element.querySelector('.xterm-screen').offsetWidth || w;
+    $('#term').style.transform = `scale(${Math.min(1, w / natural)})`;
+  }
+  function open(id) {
+    current = sessions.find((s) => s.id === id) || { id, name: 'Session' };
+    $('#home').style.display = 'none';
+    $('#view').classList.add('on');
+    $('#title').textContent = current.name;
+    $('#readonly').style.display = me.full ? 'none' : 'block';
+    $('#keys').style.display = me.full ? 'flex' : 'none';
+    $('#send').style.display = me.full ? 'flex' : 'none';
+    $('#back').style.display = me.session ? 'none' : '';
+    es?.close();
+    term?.dispose();
+    term = new Terminal({ fontSize: 12, disableStdin: true, convertEol: false, scrollback: 5000, theme: { background: '#0E0F12', foreground: '#D4D8E1' } });
+    term.open($('#term'));
+    es = new EventSource(q('/api/stream/' + id));
+    es.addEventListener('init', (m) => {
+      const d = JSON.parse(m.data);
+      term.resize(d.cols, d.rows);
+      term.write(d.buffer, scheduleText);
+      setStatus(d.running ? d.status : 'paused');
+      setTimeout(fit, 50);
+    });
+    es.addEventListener('data', (m) => term.write(JSON.parse(m.data), scheduleText));
+    es.addEventListener('resize', (m) => { const d = JSON.parse(m.data); term.resize(d.cols, d.rows); setTimeout(fit, 50); });
+  }
+  // Text mode: the terminal runs off-screen at full width; we show its lines as wrapped,
+  // readable text. Screen mode shows the real terminal, scaled to fit.
+  let textTimer = null;
+  function refreshText() {
+    textTimer = null;
+    if (!term || !document.body.classList.contains('textmode')) return;
+    const buf = term.buffer.active;
+    const lines = [];
+    // Collapse wide gaps (right-aligned status text) so lines wrap sensibly on a narrow screen.
+    for (let i = 0; i < buf.length; i++) {
+      lines.push((buf.getLine(i)?.translateToString(true) ?? '')
+        .replace(/(\S) {4,}(?=\S)/g, '$1   ')
+        .replace(/[─━═]{12,}/g, '────────────')); // full-width rules would wrap into several lines
+    }
+    while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+    const box = $('#text');
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    box.textContent = lines.slice(-400).join('\n');
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+  const scheduleText = () => { textTimer ??= setTimeout(refreshText, 150); };
+  document.body.classList.add('textmode');
+  $('#mode').onclick = () => {
+    const text = document.body.classList.toggle('textmode');
+    $('#mode').textContent = text ? 'Screen' : 'Text';
+    if (text) refreshText(); else setTimeout(fit, 30);
+  };
+
+  function setStatus(s) { $('#vstatus').textContent = LABEL[s] || s; $('#vstatus').className = 'st ' + s; }
+  async function input(body) {
+    const r = await fetch(q('/api/input/' + current.id), { method: 'POST', headers: { 'content-type': 'application/json', 'x-meta': '1' }, body: JSON.stringify(body) });
+    if (!r.ok) alert((await r.json()).error || 'failed');
+  }
+  $('#back').onclick = () => { es?.close(); $('#view').classList.remove('on'); $('#home').style.display = ''; load(); };
+  for (const b of document.querySelectorAll('#keys button')) b.onclick = () => input({ key: b.dataset.key });
+  $('#send').onsubmit = (e) => { e.preventDefault(); const t = $('#msg').value; if (!t) return; input({ text: t, submit: true }); $('#msg').value = ''; };
+  window.addEventListener('resize', fit);
+  if (!share) {
+    const ev = new EventSource('/api/events');
+    ev.addEventListener('status', (m) => {
+      const d = JSON.parse(m.data);
+      const s = sessions.find((x) => x.id === d.id);
+      if (s) { s.status = d.status; render(); }
+      if (current?.id === d.id) setStatus(d.status);
+      if (d.status === 'needs' && navigator.vibrate) navigator.vibrate(200);
+    });
+  }
+  load();
+</script>
+</body>
+</html>

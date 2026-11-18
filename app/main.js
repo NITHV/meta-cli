@@ -702,8 +702,11 @@ function spawnSession(s, cols, rows, prompt) {
   const proc = pty.spawn(file, args, { name: 'xterm-256color', cols, rows, cwd: workDir(s), env, useConpty: true });
   const l = { proc, buffer: '', status: 'idle', pending: '', timer: null, lastActive: Date.now() };
   live.set(s.id, l);
+  l.cols = cols;
+  l.rows = rows;
   proc.onData((d) => {
     l.lastActive = Date.now();
+    if (bus.listenerCount('pty')) bus.emit('pty', s.id, d); // phone / share viewers
     l.buffer += d;
     if (l.buffer.length > MAX_BUFFER) l.buffer = l.buffer.slice(-MAX_BUFFER);
     l.pending += d;
@@ -759,7 +762,9 @@ ipcMain.on('session:write', (_e, id, data) => {
   l.proc.write(data);
 });
 ipcMain.on('session:resize', (_e, id, cols, rows) => {
-  if (cols > 0 && rows > 0) try { live.get(id)?.proc.resize(cols, rows); } catch { /* exited */ }
+  const l = live.get(id);
+  if (!l || !(cols > 0 && rows > 0)) return;
+  try { l.proc.resize(cols, rows); l.cols = cols; l.rows = rows; bus.emit('resize', id, cols, rows); } catch { /* exited */ }
 });
 ipcMain.on('session:active', (_e, id) => { if (state.project) { state.active[state.project] = id; saveState(); } });
 
@@ -1027,6 +1032,15 @@ function createWindow() {
   win.on('closed', () => { win = null; });
 }
 
+// Safety net: an unexpected error in a feature must not freeze the app behind Electron's
+// blocking error dialog (with every Claude tab stuck). Log it, tell the user, keep running.
+process.on('uncaughtException', (err) => {
+  try {
+    fs.appendFileSync(path.join(app.getPath('userData'), 'error.log'), `${new Date().toISOString()} ${err?.stack || err}\n`);
+  } catch { /* nowhere to log */ }
+  send('app:error', String(err?.message || err).slice(0, 300));
+});
+
 app.whenReady().then(async () => {
   app.setAppUserModelId('meta.ide'); // Windows notifications need this
   loadState();
@@ -1044,11 +1058,12 @@ const featureCtx = {
   get state() { return state; }, // loadState() replaces the object later, so read it live
   ipcMain, app, shell, clipboard, dialog, Notification, saveState, send, live, spawnSession, publicSession,
   inProject, inProjectOf, cleanEnv, workDir, getWin: () => win, appDir: APP_DIR, transcriptFile, conversationTail,
-  renderMarkdown, bus, claudeArgHooks, setProject,
+  renderMarkdown, bus, claudeArgHooks, setProject, whichClaude: () => (claudeExe ??= whichClaude()),
 };
 require('./lib/workspace').init(featureCtx);
 require('./lib/content').init(featureCtx);
 require('./lib/devtools').init(featureCtx);
+require('./lib/remote').init(featureCtx);
 
 app.on('window-all-closed', () => {
   for (const l of live.values()) { try { l.proc.kill(); } catch { /* gone */ } }
