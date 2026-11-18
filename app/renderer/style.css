@@ -158,6 +158,41 @@ button.icon:hover { background: var(--raised); color: var(--text); }
 .mermaid-src svg { max-width: 100%; height: auto; }
 .mermaid-src.error { color: var(--error); font: 12px var(--mono); white-space: pre-wrap; }
 
+/* ---------- changes, queue */
+.capped { max-height: 160px; }
+button.link { color: var(--accent); font-size: 11px; letter-spacing: 0; font-weight: 600; padding: 0; }
+button.link:hover { text-decoration: underline; }
+button.danger:hover { border-color: var(--error); color: var(--error); }
+.kind { font-size: 11px; font-weight: 600; }
+.kind.new { color: var(--done); }
+.kind.edited { color: var(--accent); }
+.kind.deleted { color: var(--error); }
+#diffView { flex: 1; min-height: 0; }
+#queueView { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.qform { display: flex; flex-direction: column; gap: 8px; }
+.qform textarea { width: 100%; resize: vertical; background: var(--base); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 13px/1.45 var(--sans); }
+.qform textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.qopts { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; color: var(--text-2); }
+.qopts select { margin-left: 6px; background: var(--base); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: inherit; }
+.qopts .chk { display: flex; align-items: center; gap: 6px; }
+.qbar { display: flex; align-items: center; gap: 8px; }
+.note { margin: 0; font-size: 12px; color: var(--faint); line-height: 1.5; }
+.qitem { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; background: var(--base); }
+.qitem .qtop { display: flex; align-items: center; gap: 8px; }
+.qitem .qtask { white-space: pre-wrap; color: var(--text); }
+.qitem .qmeta { font-size: 12px; color: var(--faint); }
+.qitem .qlog { font: 12px/1.5 var(--mono); color: var(--muted); max-height: 120px; overflow: auto; white-space: pre-wrap; }
+.qitem .qsum { font-size: 13px; color: var(--text-2); white-space: pre-wrap; max-height: 120px; overflow: auto; }
+.qitem .qactions { display: flex; gap: 6px; flex-wrap: wrap; }
+.qitem .qfiles { display: flex; flex-direction: column; }
+.qitem .qfiles button { text-align: left; color: var(--accent); padding: 2px 0; font-size: 12px; }
+.qstatus { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.qstatus.pending { color: var(--faint); }
+.qstatus.running { color: var(--working); }
+.qstatus.done, .qstatus.applied { color: var(--done); }
+.qstatus.failed, .qstatus.cancelled { color: var(--error); }
+.qstatus.discarded { color: var(--faint); }
+
 /* ---------- status bar */
 #statusbar { display: flex; align-items: center; gap: 16px; height: 28px; padding: 0 14px; background: var(--surface); border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); flex: none; }
 #statusbar .needs { color: var(--needs); }

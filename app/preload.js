@@ -21,6 +21,20 @@ contextBridge.exposeInMainWorld('meta', {
   closeSession: (id) => ipcRenderer.invoke('session:close', id),
   renameSession: (id, name) => ipcRenderer.invoke('session:rename', id, name),
   setActive: (id) => ipcRenderer.send('session:active', id),
+  handoff: (id, cols, rows) => ipcRenderer.invoke('session:handoff', id, cols, rows),
+
+  changes: (id) => ipcRenderer.invoke('changes:list', id),
+  changeDiff: (id, rel) => ipcRenderer.invoke('changes:diff', id, rel),
+  revertChange: (id, rel) => ipcRenderer.invoke('changes:revert', id, rel),
+
+  queue: () => ipcRenderer.invoke('queue:list'),
+  queueAdd: (item) => ipcRenderer.invoke('queue:add', item),
+  queueRemove: (id) => ipcRenderer.invoke('queue:remove', id),
+  queueStart: () => ipcRenderer.invoke('queue:start'),
+  queueStop: () => ipcRenderer.invoke('queue:stop'),
+  queueDiff: (id) => ipcRenderer.invoke('queue:diff', id),
+  queueApply: (id) => ipcRenderer.invoke('queue:apply', id),
+  queueDiscard: (id) => ipcRenderer.invoke('queue:discard', id),
 
   listFiles: () => ipcRenderer.invoke('fs:list'),
   readFile: (rel) => ipcRenderer.invoke('fs:read', rel),
@@ -37,4 +51,6 @@ contextBridge.exposeInMainWorld('meta', {
   onFocusSession: on('session:focus'),
   onFsChanged: on('fs:changed'),
   onTokens: on('tokens:update'),
+  onChanges: on('changes:update'),
+  onQueue: on('queue:update'),
 });

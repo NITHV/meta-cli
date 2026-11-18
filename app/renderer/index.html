@@ -39,8 +39,16 @@
       <div class="side-head"><span>FILES</span><span id="changedCount" class="accent"></span></div>
       <div id="tree" class="scroll"></div>
       <div class="side-section">
+        <div class="side-head"><span>CHANGES</span><span id="changesCount" class="muted"></span></div>
+        <div id="changeList" class="scroll capped"></div>
+      </div>
+      <div class="side-section">
         <div class="side-head"><span>SESSIONS</span></div>
         <div id="sessionList"></div>
+      </div>
+      <div class="side-section">
+        <div class="side-head"><span>QUEUE</span><button id="openQueue" class="link">Open</button></div>
+        <div id="queueSummary" class="row muted"></div>
       </div>
       <div class="side-section">
         <div class="side-head"><span>TOKENS</span></div>
@@ -67,11 +75,39 @@
           <button data-mode="read" class="on">Read</button>
           <button data-mode="source">Source</button>
         </div>
+        <button id="revertBtn" class="ghost small danger" title="Put this file back the way it was before this session edited it" hidden>Undo changes</button>
         <button id="mentionBtn" class="ghost small" title="Mention this file in the active Claude session">@ Mention</button>
         <button id="closeReader" class="icon" aria-label="Close file">✕</button>
       </div>
       <article id="mdView" class="markdown scroll"></article>
       <div id="codeView"></div>
+      <div id="diffView" hidden></div>
+      <div id="queueView" class="scroll" hidden>
+        <form id="queueForm" class="qform">
+          <textarea id="queueTask" rows="3" placeholder="A task to run unattended, e.g. &quot;add tests for the parser&quot;"></textarea>
+          <div class="qopts">
+            <label>Model
+              <select id="queueModel">
+                <option value="">default</option>
+                <option value="opus">opus</option>
+                <option value="sonnet">sonnet</option>
+                <option value="haiku">haiku</option>
+              </select>
+            </label>
+            <label class="chk"><input type="checkbox" id="queueYolo"> Allow shell commands</label>
+            <span class="spacer"></span>
+            <button type="submit" class="ghost">Add to queue</button>
+          </div>
+        </form>
+        <div class="qbar">
+          <span id="queueState" class="muted"></span>
+          <span class="spacer"></span>
+          <button id="queueStop" class="ghost small" hidden>Stop</button>
+          <button id="queueStart" class="primary">Run queue</button>
+        </div>
+        <p class="note">Each task runs on its own copy of the repo (a git worktree), one after another. Nothing touches your files until you press Apply.</p>
+        <div id="queueList"></div>
+      </div>
     </section>
   </div>
 

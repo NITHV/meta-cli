@@ -106,6 +106,7 @@ async function activate(id) {
   for (const x of S.sessions.values()) x.el.hidden = x !== s;
   $('#noSession').hidden = true;
   renderSessions();
+  renderChanges();
   await attach(s);
   requestAnimationFrame(() => { try { s.fit.fit(); } catch { /* ignore */ } s.term.focus(); });
 }
@@ -118,7 +119,8 @@ function estimateSize() {
 async function newSession(kind = 'claude', opts = {}) {
   if (!S.project) return toast('Open a folder first');
   try {
-    const info = await api.createSession({ kind, ...estimateSize(), ...opts });
+    const model = kind === 'claude' ? store.get('meta.model', '') : '';
+    const info = await api.createSession({ kind, model, ...estimateSize(), ...opts });
     makeTerm(info);
     await activate(info.id);
   } catch (e) {
@@ -180,6 +182,7 @@ function renderSessions() {
     close);
     tab.onclick = () => activate(s.info.id);
     tab.ondblclick = () => startRename(s, tab);
+    tab.oncontextmenu = (e) => { e.preventDefault(); tabMenu(s, e.clientX, e.clientY, tab); };
     return tab;
   }));
   $('#tabs').querySelector('.active')?.scrollIntoView({ inline: 'nearest' });
@@ -302,7 +305,12 @@ function loadMonaco() {
       const m = window.monaco;
       m.editor.defineTheme('meta', {
         base: 'vs-dark', inherit: true, rules: [],
-        colors: { 'editor.background': '#16181D', 'editorLineNumber.foreground': '#5C6474', 'editor.lineHighlightBackground': '#1E2128' },
+        colors: {
+          'editor.background': '#16181D', 'editorLineNumber.foreground': '#5C6474', 'editor.lineHighlightBackground': '#1E2128',
+          'diffEditor.insertedLineBackground': '#4ECB8F14', 'diffEditor.insertedTextBackground': '#4ECB8F30',
+          'diffEditor.removedLineBackground': '#F06A6A14', 'diffEditor.removedTextBackground': '#F06A6A30',
+          'diffEditorGutter.insertedLineBackground': '#4ECB8F22', 'diffEditorGutter.removedLineBackground': '#F06A6A22',
+        },
       });
       // Creating the editor with the theme is what installs the theme's token colors,
       // which Markdown code blocks (colorize) also use. setTheme() alone doesn't.
@@ -323,6 +331,17 @@ function langFor(p) {
   return map[ext] || 'plaintext';
 }
 
+/** The reader shows one pane at a time: md | code | diff | queue. */
+function pane(name) {
+  $('#mdView').hidden = name !== 'md';
+  $('#codeView').hidden = name !== 'code';
+  $('#diffView').hidden = name !== 'diff';
+  $('#queueView').hidden = name !== 'queue';
+  $('#mentionBtn').hidden = name === 'queue';
+  if (name !== 'diff') $('#revertBtn').hidden = true;
+  if (name === 'diff' || name === 'queue') $('#viewToggle').hidden = true;
+}
+
 function showReader(show) {
   $('#reader').hidden = !show;
   $('#resizer').hidden = !show;
@@ -335,7 +354,8 @@ async function openFile(p, { keepScroll = false } = {}) {
   let data;
   try { data = await api.readFile(p); } catch (e) { return toast(e.message); }
   const isMd = data.html != null;
-  const mode = S.open?.path === p ? S.open.mode : (isMd ? 'read' : 'source');
+  const keep = S.open?.path === p && (S.open.mode === 'read' || S.open.mode === 'source');
+  const mode = keep ? S.open.mode : (isMd ? 'read' : 'source');
   S.open = { path: p, mode, isMd, data };
   $('#readerTitle').textContent = base(p);
   $('#readerMeta').textContent = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
@@ -344,8 +364,7 @@ async function openFile(p, { keepScroll = false } = {}) {
   showReader(true);
   renderTree();
   if (data.binary) {
-    $('#codeView').hidden = true;
-    $('#mdView').hidden = false;
+    pane('md');
     $('#mdView').replaceChildren(el('p', { className: 'muted', textContent: `Binary or large file (${fmt(data.size)} bytes). Not shown.` }));
     return;
   }
@@ -356,8 +375,8 @@ async function openFile(p, { keepScroll = false } = {}) {
 async function renderMarkdown(data, keepScroll) {
   const view = $('#mdView');
   const top = keepScroll ? view.scrollTop : 0;
-  $('#codeView').hidden = true;
-  view.hidden = false;
+  pane('md');
+  $('#viewToggle').hidden = false;
   view.innerHTML = data.html; // produced by markdown-it in the main process with raw HTML disabled
   const dir = S.open.path.includes('/') ? S.open.path.slice(0, S.open.path.lastIndexOf('/') + 1) : '';
 
@@ -437,14 +456,160 @@ function normalize(p) {
 }
 
 async function renderCode(p, content) {
-  $('#mdView').hidden = true;
-  $('#codeView').hidden = false;
+  pane('code');
+  $('#viewToggle').hidden = !S.open?.isMd;
   const m = await loadMonaco();
   const top = S.open?.path === p ? codeEditor.getScrollTop() : 0;
   const old = codeEditor.getModel();
   codeEditor.setModel(m.editor.createModel(content, langFor(p)));
   old?.dispose();
   codeEditor.setScrollTop(top);
+}
+
+// ---------- diffs (per-session changes and queue results)
+
+let diffEditor = null;
+
+/** Show before/after in Monaco's diff view. onRevert, when given, enables "Undo changes". */
+async function openDiff({ path: p, before, after, meta, onRevert }) {
+  const m = await loadMonaco();
+  S.open = { path: p, mode: 'diff', isMd: false, data: null };
+  $('#readerTitle').textContent = base(p);
+  $('#readerMeta').textContent = meta;
+  showReader(true);
+  pane('diff');
+  diffEditor ??= m.editor.createDiffEditor($('#diffView'), {
+    readOnly: true, automaticLayout: true, minimap: { enabled: false }, theme: 'meta', renderSideBySide: false,
+    fontFamily: '"Cascadia Code", Consolas, monospace', fontSize: 13, scrollBeyondLastLine: false, originalEditable: false,
+  });
+  const old = diffEditor.getModel();
+  const lang = langFor(p);
+  diffEditor.setModel({ original: m.editor.createModel(before, lang), modified: m.editor.createModel(after, lang) });
+  old?.original.dispose();
+  old?.modified.dispose();
+  $('#revertBtn').hidden = !onRevert;
+  $('#revertBtn').onclick = async () => {
+    if (!confirm(`Undo this session's changes to ${p}? The file goes back to how it was before.`)) return;
+    try { await onRevert(); toast(`Reverted ${p}`); showReader(false); renderChanges(); } catch (e) { toast(e.message); }
+  };
+  renderTree();
+}
+
+// ---------- changes made by the active session
+
+let changesTimer;
+function scheduleChanges() { clearTimeout(changesTimer); changesTimer = setTimeout(renderChanges, 250); }
+
+async function renderChanges() {
+  const s = S.sessions.get(S.active);
+  const box = $('#changeList');
+  if (!s || s.info.kind !== 'claude') { box.replaceChildren(el('div', { className: 'row muted', textContent: 'Pick a Claude tab' })); $('#changesCount').textContent = ''; return; }
+  let list = [];
+  try { list = await api.changes(s.info.id); } catch { /* ignore */ }
+  $('#changesCount').textContent = list.length ? String(list.length) : '';
+  box.replaceChildren(...list.map((c) => {
+    const r = el('button', { className: 'row file' + (S.open?.mode === 'diff' && S.open.path === c.path ? ' active' : ''), title: c.path },
+      el('span', { className: 'name', textContent: c.path }),
+      el('span', { className: 'kind ' + c.kind, textContent: c.kind }));
+    r.onclick = async () => {
+      try {
+        const d = await api.changeDiff(s.info.id, c.path);
+        openDiff({ path: c.path, before: d.before, after: d.after, meta: `changed by ${s.info.name}`, onRevert: () => api.revertChange(s.info.id, c.path) });
+      } catch (e) { toast(e.message); }
+    };
+    return r;
+  }));
+  if (!list.length) box.append(el('div', { className: 'row muted', textContent: 'No edits in this session yet' }));
+}
+
+// ---------- night queue
+
+let queue = [];
+
+function openQueue() {
+  S.open = { path: '', mode: 'queue', isMd: false, data: null };
+  $('#readerTitle').textContent = 'Queue';
+  $('#readerMeta').textContent = 'runs unattended, one task at a time';
+  showReader(true);
+  pane('queue');
+  renderQueue();
+  $('#queueTask').focus();
+}
+
+function renderQueue() {
+  const mine = queue.filter((q) => q.project === S.project);
+  const pending = mine.filter((q) => q.status === 'pending').length;
+  const running = mine.find((q) => q.status === 'running');
+  const ready = mine.filter((q) => q.status === 'done').length;
+  $('#queueSummary').textContent = [running && '1 running', pending && `${pending} waiting`, ready && `${ready} to review`].filter(Boolean).join(' · ') || 'Empty';
+  $('#queueState').textContent = running ? 'Running…' : pending ? `${pending} waiting` : 'Idle';
+  $('#queueStart').hidden = !!running;
+  $('#queueStart').disabled = !pending;
+  $('#queueStop').hidden = !running;
+  if ($('#queueView').hidden) return;
+  $('#queueList').replaceChildren(...[...mine].reverse().map((q) => {
+    const actions = el('div', { className: 'qactions' });
+    const files = el('div', { className: 'qfiles' });
+    if (q.status === 'done' && q.files?.length) {
+      const review = el('button', { className: 'ghost small', textContent: `Review ${q.files.length} file(s)` });
+      review.onclick = async () => {
+        try {
+          const list = await api.queueDiff(q.id);
+          files.replaceChildren(...list.map((f) => {
+            const b = el('button', { textContent: f.path });
+            b.onclick = () => openDiff({ path: f.path, before: f.before, after: f.after, meta: `queue result · ${q.task.slice(0, 40)}` });
+            return b;
+          }));
+        } catch (e) { toast(e.message); }
+      };
+      const apply = el('button', { className: 'primary', textContent: 'Apply' });
+      apply.style.height = '26px';
+      apply.onclick = async () => { try { await api.queueApply(q.id); toast('Applied. Changes are staged in git: review and commit.'); } catch (e) { toast(e.message); } };
+      actions.append(review, apply);
+    }
+    if (q.status === 'done' || q.status === 'failed' || q.status === 'cancelled') {
+      const discard = el('button', { className: 'ghost small', textContent: 'Discard' });
+      discard.onclick = async () => { try { await api.queueDiscard(q.id); } catch (e) { toast(e.message); } };
+      actions.append(discard);
+    }
+    if (q.status !== 'running') {
+      const remove = el('button', { className: 'ghost small', textContent: 'Remove' });
+      remove.onclick = async () => { try { queue = await api.queueRemove(q.id); renderQueue(); } catch (e) { toast(e.message); } };
+      actions.append(remove);
+    }
+    const when = q.endedAt ? `finished ${new Date(q.endedAt).toLocaleTimeString()}` : q.startedAt ? `started ${new Date(q.startedAt).toLocaleTimeString()}` : 'waiting';
+    return el('div', { className: 'qitem' },
+      el('div', { className: 'qtop' },
+        el('span', { className: 'qstatus ' + q.status, textContent: q.status === 'done' ? 'ready to review' : q.status }),
+        el('span', { className: 'qmeta', textContent: `${q.model || 'default model'}${q.yolo ? ' · shell allowed' : ''} · ${when}` })),
+      el('div', { className: 'qtask', textContent: q.task }),
+      q.status === 'running' && q.log?.length ? el('div', { className: 'qlog', textContent: q.log.slice(-8).join('\n') }) : null,
+      q.summary && q.status !== 'running' ? el('div', { className: 'qsum', textContent: q.summary }) : null,
+      q.status === 'done' && !q.files?.length ? el('div', { className: 'qmeta', textContent: 'No file changes.' }) : null,
+      files,
+      actions);
+  }));
+  if (!mine.length) $('#queueList').append(el('p', { className: 'note', textContent: 'Nothing queued. Add tasks above, then press Run queue before you go to bed.' }));
+}
+
+// ---------- tab menu + handoff
+
+function tabMenu(s, x, y, tabEl) {
+  showMenu(x, y, [
+    ['Rename', () => startRename(s, tabEl)],
+    s.info.kind === 'claude' ? ['Continue in a new tab', () => handoff(s)] : null,
+    null,
+    ['Close', () => closeSession(s.info.id), 'Ctrl Shift W'],
+  ].filter((x, i, a) => x !== null || (i > 0 && a[i - 1] !== null)));
+}
+
+async function handoff(s) {
+  try {
+    const info = await api.handoff(s.info.id, ...Object.values(estimateSize()));
+    makeTerm(info);
+    await activate(info.id);
+    toast('New tab started with the end of the old conversation');
+  } catch (e) { toast(e.message); }
 }
 
 function setupResizer() {
@@ -565,10 +730,15 @@ function projectMenu() {
 
 function newMenu() {
   const r = $('#newMenuBtn').getBoundingClientRect();
+  const cur = store.get('meta.model', '');
+  const pick = (m) => () => { store.set('meta.model', m); toast(`New Claude tabs use ${m || "Claude's default model"}`); };
   showMenu(r.left, r.bottom + 4, [
     ['New Claude session', () => newSession('claude'), 'Ctrl T'],
     ['Start Claude on a file…', () => openQuick('start'), ''],
     ['New PowerShell', () => newSession('shell'), 'Ctrl Shift T'],
+    null,
+    ...[['', 'Default model'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']]
+      .map(([m, label]) => [`New tabs: ${label}`, pick(m), cur === m ? '●' : '']),
   ]);
 }
 
@@ -621,8 +791,9 @@ async function enterProject(dir, alreadySet = false) {
   const list = projectSessions();
   const target = list.find((s) => s.info.id === want) || list[0];
   renderSessions();
+  renderQueue();
   if (target) activate(target.info.id);
-  else $('#noSession').hidden = false;
+  else { $('#noSession').hidden = false; renderChanges(); }
 }
 
 function showStart(recent) {
@@ -711,16 +882,35 @@ async function boot() {
     const now = Date.now();
     for (const p of touched) S.changed.set(p, { kind: created.includes(p) || S.changed.get(p)?.kind === 'new' ? 'new' : 'changed', at: now });
     renderTree();
-    if (S.open && touched.includes(S.open.path)) openFile(S.open.path, { keepScroll: true });
+    const viewing = S.open && (S.open.mode === 'read' || S.open.mode === 'source');
+    if (viewing && touched.includes(S.open.path)) openFile(S.open.path, { keepScroll: true });
     if (!$('#quick').hidden) renderQuick();
+    scheduleChanges();
   });
   api.onTokens((t) => { S.tokens = t; renderTokens(); });
+  api.onChanges(({ id }) => { if (id === S.active) scheduleChanges(); });
+  api.onQueue((q) => { queue = q; renderQueue(); });
+
+  $('#openQueue').onclick = openQueue;
+  $('#queueForm').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      queue = await api.queueAdd({ task: $('#queueTask').value, model: $('#queueModel').value, yolo: $('#queueYolo').checked });
+      $('#queueTask').value = '';
+      renderQueue();
+    } catch (err) { toast(err.message); }
+  };
+  $('#queueTask').onkeydown = (e) => { if (e.key === 'Enter' && e.ctrlKey) $('#queueForm').requestSubmit(); };
+  $('#queueStart').onclick = () => api.queueStart();
+  $('#queueStop').onclick = () => api.queueStop();
 
   const st = await api.state();
   S.recent = st.recent;
   if (st.project) await enterProject(st.project, true);
   else showStart(st.recent);
   refreshTokens();
+  queue = await api.queue();
+  renderQueue();
   setInterval(renderTree, 60_000); // let "changed" markers expire
 }
 

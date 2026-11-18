@@ -12,6 +12,12 @@ meta ide                      # open the IDE on the current folder
 meta ide D:\path\to\project
 ```
 
+Also: **Changes** (sidebar) lists the files the active Claude tab edited, with a
+diff and **Undo changes**; right-click a tab for **Continue in a new tab** (fresh
+session that starts with the end of the old conversation); the **Queue** runs
+tasks unattended one by one, each in its own git worktree, for review and Apply
+later; the **▾** menu picks the model for new tabs (`--model`, that tab only).
+
 Keys: Ctrl+T new Claude · Ctrl+Shift+T PowerShell · Ctrl+1–9 / Ctrl+Tab switch ·
 Ctrl+P open file (Alt+Enter mentions it in Claude) · Ctrl+B files · Ctrl+\ reader ·
 Ctrl+Shift+W close tab · right-click a file for "Start Claude on this file".

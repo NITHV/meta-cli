@@ -68,7 +68,10 @@ async function cmdRun(task: string, o: Opts): Promise<number> {
   const ctx = context();
 
   const out = await runOne(ctx, specs[0], task, { yolo: o.yolo }, {
-    onStart: (id) => { if (!o.json) console.log(dim(`run ${id} · ${label(specs[0])} · worktree .meta/worktrees/${id}`)); },
+    onStart: (id) => {
+      if (o.json) process.stdout.write(JSON.stringify({ kind: 'meta', run: id, base: ctx.base }) + '\n');
+      else console.log(dim(`run ${id} · ${label(specs[0])} · worktree .meta/worktrees/${id}`));
+    },
     onEvent: (_id, ev) => printEvent(ev, o.json),
   });
 
