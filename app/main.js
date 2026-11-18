@@ -15,6 +15,9 @@ const MarkdownIt = require('markdown-it');
 
 const APP_DIR = __dirname;
 let win = null;
+// Feature modules subscribe here ('start', 'status') and can add Claude CLI arguments.
+const bus = new (require('node:events'))();
+const claudeArgHooks = []; // (session) => string[]
 
 // ---------------------------------------------------------------- state
 
@@ -125,6 +128,7 @@ function setStatus(id, status, message = '') {
   l.status = status;
   send('session:status', { id, status });
   const s = state.sessions.find((x) => x.id === id);
+  if (s) bus.emit('status', { session: s, status, message });
   const watching = win && win.isFocused() && state.active[s?.project] === id;
   if (s && !watching && (status === 'needs' || status === 'done') && Notification.isSupported()) {
     const n = new Notification({
@@ -587,10 +591,45 @@ ipcMain.handle('git:diff', (_e, rel, staged) => {
 });
 ipcMain.handle('git:stage', (_e, paths) => { try { git(['add', '--', ...paths.map((p) => (inProject(p), p))]); return true; } catch (e) { throw gitErr(e); } });
 ipcMain.handle('git:unstage', (_e, paths) => { try { git(['reset', '-q', 'HEAD', '--', ...paths.map((p) => (inProject(p), p))]); return true; } catch (e) { throw gitErr(e); } });
-ipcMain.handle('git:commit', (_e, message) => {
+ipcMain.handle('git:commit', (_e, message, force = false) => {
   if (!String(message || '').trim()) throw new Error('write a commit message first');
+  if (!force) {
+    const found = scanStagedForSecrets();
+    if (found.length) throw new Error('SECRETS:' + JSON.stringify(found.slice(0, 8)));
+  }
   try { return git(['commit', '-F', '-'], { input: String(message) }).trim(); } catch (e) { throw gitErr(e); }
 });
+
+// Secret guard: look at the lines being added in this commit for things that look like credentials.
+const SECRET_PATTERNS = [
+  ['AWS access key', /\bAKIA[0-9A-Z]{16}\b/],
+  ['GitHub token', /\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}\b|\bgithub_pat_[A-Za-z0-9_]{40,}\b/],
+  ['Anthropic API key', /\bsk-ant-[A-Za-z0-9_-]{20,}/],
+  ['OpenAI-style API key', /\bsk-[A-Za-z0-9]{32,}\b/],
+  ['Google API key', /\bAIza[0-9A-Za-z_-]{35}\b/],
+  ['Slack token', /\bxox[abprs]-[A-Za-z0-9-]{10,}/],
+  ['Private key', /-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/],
+  ['Password or secret assignment', /\b(password|passwd|secret|api[_-]?key|access[_-]?token)\b\s*[:=]\s*['"][^'"\s]{8,}['"]/i],
+];
+function scanStagedForSecrets() {
+  const found = [];
+  let names = [];
+  try { names = git(['diff', '--cached', '--name-only']).split(/\r?\n/).filter(Boolean); } catch { return found; }
+  for (const n of names) {
+    if (/(^|\/)\.env(\.|$)|\.(pem|p12|pfx|keystore|jks)$/i.test(n)) found.push({ file: n, kind: 'secret-looking file', line: '' });
+  }
+  let diff = '';
+  try { diff = git(['diff', '--cached', '-U0', '--no-color']); } catch { return found; }
+  let file = '';
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith('+++ ')) { file = line.replace(/^\+\+\+ (b\/)?/, ''); continue; }
+    if (!line.startsWith('+') || line.startsWith('+++')) continue;
+    for (const [kind, re] of SECRET_PATTERNS) {
+      if (re.test(line)) { found.push({ file, kind, line: line.slice(1).trim().slice(0, 80) }); break; }
+    }
+  }
+  return found;
+}
 ipcMain.handle('git:push', () => {
   try { return git(['push'], { env: cleanEnv() }).trim() || 'pushed'; } catch (e) {
     const msg = String(e.stderr || '');
@@ -654,6 +693,7 @@ function spawnSession(s, cols, rows, prompt) {
     args = ['--settings', HOOKS_FILE(), '--name', s.name];
     if (s.model && /^[\w.:-]+$/.test(s.model)) args.push('--model', s.model); // this session only
     args.push(...(transcriptExists(s.claudeId) ? ['--resume', s.claudeId] : ['--session-id', s.claudeId]));
+    for (const hook of claudeArgHooks) { try { args.push(...hook(s)); } catch { /* a module's problem must not block the session */ } }
     if (prompt) args.push(prompt);
   } else {
     file = 'powershell.exe';
@@ -677,6 +717,7 @@ function spawnSession(s, cols, rows, prompt) {
     send('session:status', { id: s.id, status: 'paused' });
   });
   send('session:status', { id: s.id, status: 'idle' });
+  bus.emit('start', s);
   return l;
 }
 
@@ -786,6 +827,7 @@ function watchProject(root) {
         const created = touched.filter((f) => !before.has(f));
         changed = new Set();
         send('fs:changed', { files: [...fileSet], touched, created });
+        bus.emit('files', { root, touched });
       }, 300);
     });
   } catch { watcher = null; }
@@ -1002,10 +1044,11 @@ const featureCtx = {
   get state() { return state; }, // loadState() replaces the object later, so read it live
   ipcMain, app, shell, clipboard, dialog, Notification, saveState, send, live, spawnSession, publicSession,
   inProject, inProjectOf, cleanEnv, workDir, getWin: () => win, appDir: APP_DIR, transcriptFile, conversationTail,
-  renderMarkdown,
+  renderMarkdown, bus, claudeArgHooks, setProject,
 };
 require('./lib/workspace').init(featureCtx);
 require('./lib/content').init(featureCtx);
+require('./lib/devtools').init(featureCtx);
 
 app.on('window-all-closed', () => {
   for (const l of live.values()) { try { l.proc.kill(); } catch { /* gone */ } }

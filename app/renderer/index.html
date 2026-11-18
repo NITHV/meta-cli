@@ -128,6 +128,18 @@
         <textarea id="notesText" class="notes-text" placeholder="Ideas, TODOs, things to tell Claude later…"></textarea>
         <div class="git-actions"><span class="spacer"></span><button id="notesSend" class="ghost small">Send to Claude</button></div>
       </div>
+      <div id="permsView" class="scroll panel" hidden><div id="permsBody"></div></div>
+      <div id="docsView" class="scroll panel" hidden>
+        <label class="search-box"><input id="docsFilter" placeholder="Filter dependencies" aria-label="Filter dependencies" autocomplete="off"></label>
+        <div id="docsList"></div>
+      </div>
+      <div id="hooksView" class="scroll panel" hidden>
+        <p class="note">PowerShell commands run on session events. They get META_EVENT, META_SESSION and META_PROJECT in their environment. Leave a box empty to do nothing.</p>
+        <label class="hook-field">When a session starts<input id="hook-start" placeholder="e.g. Add-Content $env:USERPROFILE\meta.log &quot;$env:META_SESSION started&quot;"></label>
+        <label class="hook-field">When Claude finishes<input id="hook-done" placeholder="e.g. [console]::beep(880,150)"></label>
+        <label class="hook-field">When Claude needs you<input id="hook-needs" placeholder="e.g. a command that pings your phone"></label>
+        <div class="git-actions"><span class="spacer"></span><button id="hooksSave" class="primary">Save hooks</button></div>
+      </div>
       <div id="portsView" class="scroll panel" hidden>
         <p class="note">Servers listening on a port that were started from one of your IDE terminals. Refreshes every few seconds.</p>
         <div id="portList"></div>
@@ -166,10 +178,12 @@
     </section>
   </div>
 
+  <div id="depsBar" class="depsbar" hidden><span></span><button id="depsClose" class="ghost small">Got it</button></div>
   <footer id="statusbar">
     <span id="sbSessions"></span>
     <span id="sbNeeds" class="needs"></span>
     <span id="sbTokens" title="Tokens: input + output + cache writes. Cache reads shown in the Tokens panel."></span>
+    <button id="sbCi" class="ci" hidden></button>
     <span class="spacer"></span>
     <span>Ctrl+T new Claude</span>
     <span>Ctrl+P open file</span>

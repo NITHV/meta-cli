@@ -1,10 +1,12 @@
 // meta IDE window. Everything privileged goes through window.meta (preload.js).
 import { init as initFeatures } from './features.js';
 import { init as initContent } from './content.js';
+import { init as initDevtools } from './devtools.js';
 
 const api = window.meta;
 let F = null; // feature hooks from features.js, set in boot()
 let C = null; // content hooks from content.js (editing, themes, notes…), set in boot()
+let D = null; // dev tooling hooks from devtools.js (permissions, CI, pins…), set in boot()
 const $ = (s) => document.querySelector(s);
 const el = (tag, props = {}, ...kids) => {
   const n = Object.assign(document.createElement(tag), props);
@@ -279,6 +281,7 @@ function renderTree() {
       const c = changeOf(f);
       const row = el('button', { className: 'row file' + (S.open?.path === f ? ' active' : ''), title: f },
         el('span', { className: 'name', textContent: base(f) }),
+        D?.isPinned(f) ? el('span', { className: 'pin', textContent: 'pinned', title: 'New Claude tabs start with this file' }) : null,
         c?.kind === 'new' ? el('span', { className: 'badge', textContent: 'new' }) : c ? el('span', { className: 'cdot' }) : null);
       row.style.paddingLeft = `${28 + depth * 14}px`;
       row.onclick = () => openFile(f);
@@ -297,6 +300,7 @@ function fileMenu(f, x, y) {
     ['Open', () => openFile(f)],
     ['Mention in Claude', () => mention(f)],
     ['Start Claude on this file', () => startOnFile(f)],
+    [D.isPinned(f) ? 'Unpin' : 'Pin for new sessions', () => D.togglePin(f)],
     null,
     ['Copy path', () => api.clipboardWrite(f)],
     ['Show in Explorer', () => api.reveal(f)],
@@ -360,7 +364,7 @@ function langFor(p) {
 }
 
 /** The reader shows one pane at a time. Files: md | code | diff. Panels: the rest. */
-const PANES = { md: '#mdView', code: '#codeView', diff: '#diffView', queue: '#queueView', search: '#searchView', git: '#gitView', timeline: '#timelineView', snippets: '#snippetsView', ports: '#portsView', notes: '#notesView' };
+const PANES = { md: '#mdView', code: '#codeView', diff: '#diffView', queue: '#queueView', search: '#searchView', git: '#gitView', timeline: '#timelineView', snippets: '#snippetsView', ports: '#portsView', notes: '#notesView', perms: '#permsView', docs: '#docsView', hooks: '#hooksView' };
 const FILE_PANES = new Set(['md', 'code', 'diff']);
 function pane(name) {
   for (const [k, sel] of Object.entries(PANES)) $(sel).hidden = k !== name;
@@ -1067,6 +1071,7 @@ async function enterProject(dir, alreadySet = false) {
   renderQueue();
   refreshGit();
   F.renderScripts();
+  D.projectEntered().then(renderTree);
   if (target) activate(target.info.id);
   else { $('#noSession').hidden = false; renderChanges(); }
 }
@@ -1145,13 +1150,14 @@ async function boot() {
     newSession, openQuick, openSearch, openGit, openSnippetPicker, openSnippetManager, openTimeline, openQueue,
     toggleSidebar, pickFolder, enterProject, openFile, renameActive, handoff, closeSession, dropSession,
     makeTerm, activate, estimateSize, projectSessions, openPanel, codeEditor: () => codeEditor,
-    extraCommands: () => C.commands(),
+    extraCommands: () => [...C.commands(), ...D.commands()],
   });
   C = initContent({
     S, api, $, el, toast, store, base, F,
     openFile, openPanel, openQuick, showReader, activate, projectSessions, renderMarkdown,
     codeEditor: () => codeEditor, baseTermTheme: THEME,
   });
+  D = initDevtools({ S, api, $, el, toast, F, C, openPanel, openFile, renderTree, enterProject, newSession });
   document.addEventListener('keydown', onKey, true);
   document.addEventListener('pointerdown', (e) => { if (!$('#menu').hidden && !$('#menu').contains(e.target)) hideMenu(); });
   $('#newClaude').onclick = () => newSession('claude');
@@ -1234,7 +1240,7 @@ async function boot() {
   }
   $('#gitRefresh').onclick = refreshGit;
   $('#gitCommit').onclick = async () => {
-    try { await api.gitCommit($('#commitMsg').value); $('#commitMsg').value = ''; toast('Committed'); refreshGit(); } catch (e) { toast(e.message); }
+    try { await D.commit($('#commitMsg').value); $('#commitMsg').value = ''; toast('Committed'); refreshGit(); } catch (e) { toast(e.message); }
   };
   $('#gitPush').onclick = async () => {
     $('#gitPush').disabled = true;

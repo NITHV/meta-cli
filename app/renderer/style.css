@@ -299,6 +299,24 @@ body.focus #sidebar, body.focus #reader, body.focus #resizer, body.focus #status
 .chk-list { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--text-2); }
 .chk-list .chk { display: flex; gap: 6px; align-items: center; }
 
+/* ---------- batch 6: permissions, docs, hooks, CI, deps, pins */
+.perm-input { flex: 1; background: var(--base); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: 12px var(--mono); }
+.perm-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.mono { font-family: var(--mono); font-size: 12px; }
+.hook-field { display: flex; flex-direction: column; gap: 4px; color: var(--text-2); font-size: 12px; }
+.hook-field input { background: var(--base); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font: 12px var(--mono); }
+.hook-field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+#statusbar .ci { font-size: 12px; padding: 0 6px; border-radius: 4px; }
+#statusbar .ci:hover { background: var(--raised); }
+#statusbar .ci.ok { color: var(--done); }
+#statusbar .ci.fail { color: var(--error); }
+#statusbar .ci.running { color: var(--working); }
+.depsbar { display: flex; align-items: center; gap: 12px; padding: 6px 14px; background: var(--accent-bg); color: var(--text); border-top: 1px solid var(--accent); font-size: 12px; flex: none; }
+.depsbar span { flex: 1; }
+.row .pin { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+#docsList { display: flex; flex-direction: column; gap: 6px; }
+.rchat:disabled { opacity: .5; cursor: default; }
+
 /* ---------- status bar */
 #statusbar { display: flex; align-items: center; gap: 16px; height: 28px; padding: 0 14px; background: var(--surface); border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); flex: none; }
 #statusbar .needs { color: var(--needs); }
