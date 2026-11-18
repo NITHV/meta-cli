@@ -17,6 +17,12 @@ diff and **Undo changes**; right-click a tab for **Continue in a new tab** (fres
 session that starts with the end of the old conversation); the **Queue** runs
 tasks unattended one by one, each in its own git worktree, for review and Apply
 later; the **▾** menu picks the model for new tabs (`--model`, that tab only).
+**Timeline** shows every edit in a tab with "Undo back to here"; **Ctrl+Shift+F**
+searches files and past Claude chats (click a chat to resume it); **Ctrl+Shift+P**
+inserts a saved prompt snippet; **Ctrl+Shift+G** opens source control (stage,
+diff, commit, push, and "Write message with Claude" using Haiku).
+
+Desktop and Start menu shortcuts: `powershell -ExecutionPolicy Bypass -File app\install-shortcuts.ps1`
 
 Keys: Ctrl+T new Claude · Ctrl+Shift+T PowerShell · Ctrl+1–9 / Ctrl+Tab switch ·
 Ctrl+P open file (Alt+Enter mentions it in Claude) · Ctrl+B files · Ctrl+\ reader ·

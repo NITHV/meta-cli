@@ -93,7 +93,7 @@ function onHook({ tab, event, message, tool, file }) {
   if (!l) return;
   if (event === 'pre' || event === 'post') {
     setStatus(tab, 'working');
-    if (FILE_TOOLS.has(tool) && file) trackChange(tab, file, event);
+    if (FILE_TOOLS.has(tool) && file) trackChange(tab, file, event, tool);
   } else if (event === 'working') setStatus(tab, 'working');
   else if (event === 'done') setStatus(tab, 'done');
   else if (event === 'notify') {
@@ -129,26 +129,41 @@ function setStatus(id, status, message = '') {
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const MAX_SNAPSHOT = 2 * 1024 * 1024;
 const changes = new Map(); // tab id -> Map(rel -> { before: string|null, at })
+const timelines = new Map(); // tab id -> [{ id, at, file, tool, before, after }] one entry per edit
+const pendingBefore = new Map(); // `${tab}\0${file}` -> content just before the current edit
+const MAX_EVENTS = 300;
 const CHANGES_DIR = () => path.join(app.getPath('userData'), 'changes');
 
+function loadChangeFile(tab) {
+  let raw = {};
+  try { raw = JSON.parse(fs.readFileSync(path.join(CHANGES_DIR(), `${tab}.json`), 'utf8')); } catch { /* none yet */ }
+  // v1 files were a plain { path: change } object; v2 is { files, events }.
+  const isV2 = raw && raw.files && Array.isArray(raw.events);
+  changes.set(tab, new Map(Object.entries(isV2 ? raw.files : raw)));
+  timelines.set(tab, isV2 ? raw.events : []);
+}
 function changesFor(tab) {
-  if (!changes.has(tab)) {
-    let m = new Map();
-    try { m = new Map(Object.entries(JSON.parse(fs.readFileSync(path.join(CHANGES_DIR(), `${tab}.json`), 'utf8')))); } catch { /* none yet */ }
-    changes.set(tab, m);
-  }
+  if (!changes.has(tab)) loadChangeFile(tab);
   return changes.get(tab);
+}
+function timelineFor(tab) {
+  if (!timelines.has(tab)) loadChangeFile(tab);
+  return timelines.get(tab);
 }
 const persistTimers = new Map();
 function persistChanges(tab) {
   clearTimeout(persistTimers.get(tab));
   persistTimers.set(tab, setTimeout(() => {
     fs.mkdirSync(CHANGES_DIR(), { recursive: true });
-    fs.writeFileSync(path.join(CHANGES_DIR(), `${tab}.json`), JSON.stringify(Object.fromEntries(changesFor(tab))));
+    fs.writeFileSync(path.join(CHANGES_DIR(), `${tab}.json`), JSON.stringify({ files: Object.fromEntries(changesFor(tab)), events: timelineFor(tab) }));
   }, 500));
 }
 
-function trackChange(tab, file, event) {
+function readSnapshot(abs) {
+  try { return fs.statSync(abs).size <= MAX_SNAPSHOT ? fs.readFileSync(abs, 'utf8') : undefined; } catch { return null; }
+}
+
+function trackChange(tab, file, event, tool) {
   const s = state.sessions.find((x) => x.id === tab);
   if (!s) return;
   const abs = path.resolve(s.project, file);
@@ -156,14 +171,55 @@ function trackChange(tab, file, event) {
   if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return; // outside the project
   const key = rel.split(path.sep).join('/');
   const m = changesFor(tab);
-  if (event === 'pre' && !m.has(key)) {
-    let before = null;
-    try { if (fs.statSync(abs).size <= MAX_SNAPSHOT) before = fs.readFileSync(abs, 'utf8'); else return; } catch { before = null; }
-    m.set(key, { before, at: Date.now() });
+  const pk = `${tab}\0${key}`;
+  if (event === 'pre') {
+    const before = readSnapshot(abs);
+    if (before === undefined) return; // too large to keep
+    if (!m.has(key)) m.set(key, { before, at: Date.now() }); // session baseline: first edit only
+    pendingBefore.set(pk, before); // this edit's own "before", for the timeline
     persistChanges(tab);
+  } else if (event === 'post' && pendingBefore.has(pk)) {
+    const before = pendingBefore.get(pk);
+    pendingBefore.delete(pk);
+    const after = readSnapshot(abs);
+    if (after !== undefined && after !== before) {
+      const tl = timelineFor(tab);
+      tl.push({ id: crypto.randomUUID(), at: Date.now(), file: key, tool, before, after });
+      if (tl.length > MAX_EVENTS) tl.splice(0, tl.length - MAX_EVENTS);
+      persistChanges(tab);
+    }
   }
   if (m.has(key)) { m.get(key).at = Date.now(); send('changes:update', { id: tab }); }
 }
+
+ipcMain.handle('timeline:list', (_e, tab) =>
+  timelineFor(tab).map(({ id, at, file, tool, before, after }) => ({ id, at, file, tool, created: before === null, deleted: after === null })));
+
+ipcMain.handle('timeline:diff', (_e, tab, eventId) => {
+  const ev = timelineFor(tab).find((x) => x.id === eventId);
+  if (!ev) throw new Error('that edit is no longer in the timeline');
+  return { file: ev.file, before: ev.before ?? '', after: ev.after ?? '' };
+});
+
+/** Put every file back to how it was right after `eventId`, undoing all later edits. */
+ipcMain.handle('timeline:undoTo', (_e, tab, eventId) => {
+  const s = state.sessions.find((x) => x.id === tab);
+  const tl = timelineFor(tab);
+  const i = eventId === 'start' ? -1 : tl.findIndex((x) => x.id === eventId);
+  if (!s || (i < 0 && eventId !== 'start')) throw new Error('that edit is no longer in the timeline');
+  const later = tl.slice(i + 1);
+  const restore = new Map(); // file -> content from before its earliest later edit
+  for (const ev of later) if (!restore.has(ev.file)) restore.set(ev.file, ev.before);
+  for (const [file, content] of restore) {
+    const abs = inProjectOf(s.project, file);
+    if (content === null) fs.rmSync(abs, { force: true });
+    else { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.writeFileSync(abs, content); }
+  }
+  tl.splice(i + 1);
+  persistChanges(tab);
+  send('changes:update', { id: tab });
+  return { files: restore.size, edits: later.length };
+});
 
 function readNow(project, rel) {
   try { return fs.readFileSync(path.join(project, rel), 'utf8'); } catch { return null; }
@@ -194,6 +250,9 @@ ipcMain.handle('changes:revert', (_e, tab, rel) => {
   if (c.before === null) fs.rmSync(abs, { force: true });
   else { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.writeFileSync(abs, c.before); }
   changesFor(tab).delete(rel);
+  // Those edits are undone, so they leave the timeline too.
+  const tl = timelineFor(tab);
+  for (let i = tl.length - 1; i >= 0; i--) if (tl[i].file === rel) tl.splice(i, 1);
   persistChanges(tab);
   return true;
 });
@@ -375,6 +434,174 @@ ipcMain.handle('queue:discard', (_e, id) => {
   sendQueue();
   return true;
 });
+
+// ---------------------------------------------------------------- search
+// Text search in project files (git grep when it's a repo, else a plain scan) and in
+// past Claude conversations for this project (Claude's local transcripts).
+
+ipcMain.handle('search:files', (_e, query) => {
+  const q = String(query || '');
+  if (!state.project || q.trim().length < 2) return [];
+  const results = [];
+  try {
+    const out = execFileSync('git', ['grep', '-n', '-I', '-i', '-F', '--untracked', '-e', q], {
+      cwd: state.project, encoding: 'utf8', maxBuffer: 32 << 20, stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    for (const line of out.split(/\r?\n/)) { // CRLF files: a trailing \r would defeat the regex's "."
+      const m = /^(.+?):(\d+):(.*)$/.exec(line);
+      if (m && !m[1].split('/').some((p) => IGNORE.has(p))) results.push({ path: m[1], line: Number(m[2]), text: m[3].trim().slice(0, 200) });
+      if (results.length >= 300) break;
+    }
+    return results;
+  } catch (err) {
+    if (err.status === 1) return []; // git grep: no matches
+  }
+  const lq = q.toLowerCase();
+  for (const f of fileSet) {
+    let text;
+    try { const st = fs.statSync(path.join(state.project, f)); if (st.size > 1 << 20) continue; text = fs.readFileSync(path.join(state.project, f), 'utf8'); } catch { continue; }
+    if (text.includes('\0')) continue;
+    text.split('\n').forEach((l, i) => { if (results.length < 300 && l.toLowerCase().includes(lq)) results.push({ path: f, line: i + 1, text: l.trim().slice(0, 200) }); });
+    if (results.length >= 300) break;
+  }
+  return results;
+});
+
+/** Claude names a project's transcript folder after its path: every non-alphanumeric becomes '-'. */
+const transcriptDir = (project) => path.join(os.homedir(), '.claude', 'projects', project.replace(/[^a-zA-Z0-9]/g, '-'));
+
+ipcMain.handle('search:chats', (_e, query) => {
+  const lq = String(query || '').toLowerCase().trim();
+  if (!state.project || lq.length < 2) return [];
+  const dir = transcriptDir(state.project);
+  let files = [];
+  try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsonl')); } catch { return []; }
+  const results = [];
+  for (const f of files) {
+    const claudeId = f.slice(0, -6);
+    let text;
+    try { text = fs.readFileSync(path.join(dir, f), 'utf8'); } catch { continue; }
+    if (!text.toLowerCase().includes(lq)) continue;
+    let first = '', at = 0, hits = 0, snippet = '';
+    for (const line of text.split('\n')) {
+      if (!line.includes('"message"')) continue;
+      let o;
+      try { o = JSON.parse(line); } catch { continue; }
+      if (o.isSidechain || (o.type !== 'user' && o.type !== 'assistant')) continue;
+      const c = o.message?.content;
+      const t = typeof c === 'string' ? c : Array.isArray(c) ? c.filter((p) => p.type === 'text').map((p) => p.text).join(' ') : '';
+      if (!t || t.startsWith('<')) continue;
+      if (!first && o.type === 'user') first = t.slice(0, 120);
+      at = Date.parse(o.timestamp) || at;
+      const idx = t.toLowerCase().indexOf(lq);
+      if (idx >= 0) {
+        hits++;
+        if (!snippet) snippet = (idx > 60 ? '…' : '') + t.slice(Math.max(0, idx - 60), idx + 120).replace(/\s+/g, ' ');
+      }
+    }
+    if (!hits) continue;
+    const inIde = state.sessions.find((s) => s.claudeId === claudeId);
+    results.push({ claudeId, title: inIde?.name || first || claudeId.slice(0, 8), at, hits, snippet, sessionId: inIde?.id ?? null });
+  }
+  return results.sort((a, b) => b.at - a.at).slice(0, 50);
+});
+
+/** Open a past conversation (found by search) as a tab: claude --resume <id>. */
+ipcMain.handle('session:resumeChat', (_e, claudeId, title, cols = 120, rows = 32) => {
+  if (!state.project || !/^[0-9a-f-]{36}$/i.test(claudeId)) throw new Error('bad conversation id');
+  const existing = state.sessions.find((s) => s.claudeId === claudeId);
+  if (existing) return publicSession(existing);
+  const s = { id: crypto.randomUUID(), project: state.project, kind: 'claude', name: String(title || 'resumed').slice(0, 40), claudeId, model: '', createdAt: Date.now() };
+  state.sessions.push(s);
+  state.active[s.project] = s.id;
+  saveState();
+  spawnSession(s, cols, rows);
+  return publicSession(s);
+});
+
+// ---------------------------------------------------------------- prompt snippets
+
+const DEFAULT_SNIPPETS = [
+  { id: 'review', name: 'Review my changes', text: 'Review the uncommitted changes in this repo. List real bugs first, then risky spots. Be brief.' },
+  { id: 'tests', name: 'Write tests', text: 'Write tests for the code I just changed. Match the existing test style and run them.' },
+  { id: 'explain', name: 'Explain this file', text: 'Explain what this file does, how it fits in the project, and anything surprising: ' },
+  { id: 'plan', name: 'Plan first', text: 'Before changing anything, write a short plan in PLAN.md and wait for my OK.' },
+  { id: 'commit', name: 'Commit', text: 'Commit the current changes with a clear message. Show me the message first.' },
+];
+ipcMain.handle('snippets:get', () => (state.snippets ??= DEFAULT_SNIPPETS));
+ipcMain.handle('snippets:set', (_e, list) => {
+  if (!Array.isArray(list)) throw new Error('bad snippets');
+  state.snippets = list.filter((s) => s && typeof s.name === 'string' && typeof s.text === 'string')
+    .slice(0, 100).map((s) => ({ id: String(s.id || crypto.randomUUID()), name: s.name.slice(0, 60), text: s.text.slice(0, 8000) }));
+  saveState();
+  return state.snippets;
+});
+
+// ---------------------------------------------------------------- git (commit panel)
+
+function git(args, opts = {}) {
+  return execFileSync('git', args, { cwd: state.project, encoding: 'utf8', maxBuffer: 32 << 20, stdio: ['pipe', 'pipe', 'pipe'], ...opts });
+}
+const gitErr = (e) => new Error(String(e.stderr || e.stdout || e.message).trim().split('\n').slice(-4).join('\n'));
+
+ipcMain.handle('git:status', () => {
+  if (!state.project) return { repo: false };
+  try { git(['rev-parse', '--is-inside-work-tree']); } catch { return { repo: false }; }
+  let branch = '', ahead = null;
+  try { branch = git(['rev-parse', '--abbrev-ref', 'HEAD']).trim(); } catch { branch = '(no commits yet)'; }
+  try { ahead = Number(git(['rev-list', '--count', '@{u}..HEAD']).trim()); } catch { ahead = null; }
+  const files = [];
+  const parts = git(['status', '--porcelain=v1', '-z', '-uall']).split('\0');
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p) continue;
+    const x = p[0], y = p[1], file = p.slice(3);
+    if (x === 'R' || x === 'C') i++; // rename: next field is the old path
+    if (file.split('/').some((seg) => IGNORE.has(seg))) continue;
+    files.push({ path: file, staged: x !== ' ' && x !== '?', unstaged: y !== ' ', untracked: x === '?', code: (x + y).trim() || '?' });
+  }
+  return { repo: true, branch, ahead, files };
+});
+
+ipcMain.handle('git:diff', (_e, rel, staged) => {
+  inProject(rel);
+  const show = (rev) => { try { return git(['show', `${rev}:${rel}`]); } catch { return ''; } };
+  if (staged) return { before: show('HEAD'), after: show('') };
+  return { before: show('') || show('HEAD'), after: readNow(state.project, rel) ?? '' };
+});
+ipcMain.handle('git:stage', (_e, paths) => { try { git(['add', '--', ...paths.map((p) => (inProject(p), p))]); return true; } catch (e) { throw gitErr(e); } });
+ipcMain.handle('git:unstage', (_e, paths) => { try { git(['reset', '-q', 'HEAD', '--', ...paths.map((p) => (inProject(p), p))]); return true; } catch (e) { throw gitErr(e); } });
+ipcMain.handle('git:commit', (_e, message) => {
+  if (!String(message || '').trim()) throw new Error('write a commit message first');
+  try { return git(['commit', '-F', '-'], { input: String(message) }).trim(); } catch (e) { throw gitErr(e); }
+});
+ipcMain.handle('git:push', () => {
+  try { return git(['push'], { env: cleanEnv() }).trim() || 'pushed'; } catch (e) {
+    const msg = String(e.stderr || '');
+    if (/no upstream/i.test(msg)) {
+      try { return git(['push', '-u', 'origin', 'HEAD'], { env: cleanEnv() }).trim() || 'pushed'; } catch (e2) { throw gitErr(e2); }
+    }
+    throw gitErr(e);
+  }
+});
+
+/** Ask Claude (headless, cheap model) for a commit message from the staged diff. */
+ipcMain.handle('git:suggest', () => new Promise((resolve, reject) => {
+  let diff = '';
+  try { diff = git(['diff', '--cached', '--stat', '-p', '--no-color']); } catch (e) { return reject(gitErr(e)); }
+  if (!diff.trim()) return reject(new Error('stage some files first'));
+  claudeExe ??= whichClaude();
+  if (!claudeExe) return reject(new Error('Claude Code was not found on PATH'));
+  const prompt = 'Write a git commit message for the staged diff on stdin. First line: imperative summary under 72 characters. ' +
+    'Then a blank line and up to 4 short bullet points if useful. Output only the message, nothing else.';
+  const child = spawn(claudeExe, ['-p', prompt, '--model', 'haiku', '--output-format', 'text'], { cwd: state.project, env: cleanEnv() });
+  let out = '', err = '';
+  child.stdout.on('data', (d) => (out += d));
+  child.stderr.on('data', (d) => (err += d));
+  child.on('error', reject);
+  child.on('close', (code) => (code === 0 && out.trim() ? resolve(out.trim().replace(/^```\w*\n?|```$/g, '').trim()) : reject(new Error(err.trim() || 'Claude gave no message'))));
+  child.stdin.end(diff.slice(0, 60000));
+}));
 
 // ---------------------------------------------------------------- terminal sessions
 
@@ -710,6 +937,7 @@ function createWindow() {
     minHeight: 480,
     backgroundColor: '#0E0F12',
     title: 'meta',
+    icon: path.join(APP_DIR, 'renderer', 'icon.png'),
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: '#16181D', symbolColor: '#9AA1B2', height: 44 },
     webPreferences: { preload: path.join(APP_DIR, 'preload.js'), contextIsolation: true, sandbox: true },

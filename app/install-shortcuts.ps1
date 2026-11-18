@@ -16,7 +16,8 @@ foreach ($lnk in $targets) {
   $s.Arguments = "`"$app`""          # no folder: reopens your last project
   $s.WorkingDirectory = $app
   $s.Description = 'meta IDE: Claude Code sessions, files and Markdown in one window'
-  $s.IconLocation = "$exe,0"
+  $ico = Join-Path $app 'renderer\icon.ico'
+  $s.IconLocation = $(if (Test-Path $ico) { "$ico,0" } else { "$exe,0" })
   $s.Save()
   Write-Output "created $lnk"
 }

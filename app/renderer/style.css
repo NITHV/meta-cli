@@ -193,6 +193,54 @@ button.danger:hover { border-color: var(--error); color: var(--error); }
 .qstatus.failed, .qstatus.cancelled { color: var(--error); }
 .qstatus.discarded { color: var(--faint); }
 
+/* ---------- search, git, timeline, snippets panels */
+.panel { flex: 1; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.search-box { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--base); color: var(--muted); }
+.search-box input { flex: 1; background: none; border: 0; outline: none; color: #fff; font: 14px var(--sans); }
+.search-box:focus-within { border-color: var(--accent); }
+.panel .seg { align-self: flex-start; }
+.rgroup { display: flex; flex-direction: column; margin-bottom: 6px; }
+.rgroup .rfile { font-weight: 600; color: var(--text); padding: 4px 0; display: flex; gap: 8px; }
+.rgroup .rfile .muted { font-weight: 400; font-size: 12px; }
+.rhit { display: flex; gap: 10px; text-align: left; padding: 3px 8px; border-radius: 6px; font: 12px/1.5 var(--mono); color: var(--text-2); }
+.rhit:hover { background: var(--raised); }
+.rhit .ln { color: var(--faint); min-width: 3ch; text-align: right; }
+.rhit .tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rhit mark, .rchat mark { background: var(--accent-bg); color: var(--accent); border-radius: 2px; }
+.rchat { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--base); }
+.rchat:hover { border-color: var(--line-strong); }
+.rchat .rt { font-weight: 600; color: var(--text); }
+.rchat .rs { font-size: 12px; color: var(--text-2); line-height: 1.5; }
+.rchat .rm { font-size: 11px; color: var(--faint); }
+.git-head { display: flex; align-items: center; gap: 10px; }
+.branch { font: 600 13px var(--mono); color: var(--text); }
+#commitMsg { width: 100%; resize: vertical; background: var(--base); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 13px/1.45 var(--mono); }
+#commitMsg:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.git-actions { display: flex; align-items: center; gap: 8px; }
+.git-actions .primary { height: 28px; }
+.ggroup-title { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--faint); margin: 8px 0 4px; display: flex; justify-content: space-between; }
+.grow-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; }
+.grow-row:hover { background: var(--raised); }
+.grow-row .gp { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grow-row .gc { font: 600 11px var(--mono); width: 2ch; color: var(--accent); }
+.grow-row .gbtn { opacity: 0; font-size: 12px; color: var(--muted); padding: 0 6px; border-radius: 4px; }
+.grow-row:hover .gbtn { opacity: 1; }
+.grow-row .gbtn:hover { color: var(--text); background: var(--line); }
+.tl-item { display: grid; grid-template-columns: 14px 1fr auto; gap: 4px 10px; align-items: start; padding: 8px 6px; border-radius: 8px; }
+.tl-item:hover { background: var(--raised); }
+.tl-item .tl-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-top: 6px; }
+.tl-item .tl-main { text-align: left; display: flex; flex-direction: column; gap: 2px; }
+.tl-item .tl-file { color: var(--text); }
+.tl-item .tl-meta { font-size: 11px; color: var(--faint); }
+.tl-item .tl-undo { opacity: 0; font-size: 12px; }
+.tl-item:hover .tl-undo { opacity: 1; }
+.snip-edit { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--base); }
+.snip-edit input, .snip-edit textarea { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: 13px var(--sans); }
+.snip-edit textarea { resize: vertical; font-family: var(--mono); font-size: 12px; }
+.snip-edit .row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+#snipList { max-height: 380px; overflow: auto; padding: 6px; }
+.quick-foot .link { margin-left: auto; }
+
 /* ---------- status bar */
 #statusbar { display: flex; align-items: center; gap: 16px; height: 28px; padding: 0 14px; background: var(--surface); border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); flex: none; }
 #statusbar .needs { color: var(--needs); }

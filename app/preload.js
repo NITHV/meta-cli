@@ -27,6 +27,25 @@ contextBridge.exposeInMainWorld('meta', {
   changeDiff: (id, rel) => ipcRenderer.invoke('changes:diff', id, rel),
   revertChange: (id, rel) => ipcRenderer.invoke('changes:revert', id, rel),
 
+  timeline: (id) => ipcRenderer.invoke('timeline:list', id),
+  timelineDiff: (id, ev) => ipcRenderer.invoke('timeline:diff', id, ev),
+  timelineUndoTo: (id, ev) => ipcRenderer.invoke('timeline:undoTo', id, ev),
+
+  searchFiles: (q) => ipcRenderer.invoke('search:files', q),
+  searchChats: (q) => ipcRenderer.invoke('search:chats', q),
+  resumeChat: (claudeId, title, cols, rows) => ipcRenderer.invoke('session:resumeChat', claudeId, title, cols, rows),
+
+  snippets: () => ipcRenderer.invoke('snippets:get'),
+  setSnippets: (list) => ipcRenderer.invoke('snippets:set', list),
+
+  gitStatus: () => ipcRenderer.invoke('git:status'),
+  gitDiff: (rel, staged) => ipcRenderer.invoke('git:diff', rel, staged),
+  gitStage: (paths) => ipcRenderer.invoke('git:stage', paths),
+  gitUnstage: (paths) => ipcRenderer.invoke('git:unstage', paths),
+  gitCommit: (msg) => ipcRenderer.invoke('git:commit', msg),
+  gitPush: () => ipcRenderer.invoke('git:push'),
+  gitSuggest: () => ipcRenderer.invoke('git:suggest'),
+
   queue: () => ipcRenderer.invoke('queue:list'),
   queueAdd: (item) => ipcRenderer.invoke('queue:add', item),
   queueRemove: (id) => ipcRenderer.invoke('queue:remove', id),

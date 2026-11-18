@@ -48,7 +48,7 @@ const THEME = {
 function isAppShortcut(e) {
   if (!e.ctrlKey || e.altKey) return false;
   const k = e.key.toLowerCase();
-  if (e.shiftKey) return k === 't' || k === 'w';
+  if (e.shiftKey) return ['t', 'w', 'f', 'g', 'p'].includes(k);
   return k === 't' || k === 'p' || k === 'b' || k === '\\' || k === 'tab' || /^[1-9]$/.test(k);
 }
 
@@ -107,6 +107,7 @@ async function activate(id) {
   $('#noSession').hidden = true;
   renderSessions();
   renderChanges();
+  renderTimeline();
   await attach(s);
   requestAnimationFrame(() => { try { s.fit.fit(); } catch { /* ignore */ } s.term.focus(); });
 }
@@ -201,9 +202,11 @@ function renderSessions() {
   if (!S.active || !S.sessions.has(S.active)) for (const x of S.sessions.values()) x.el.hidden = true;
 
   const all = [...S.sessions.values()];
-  const running = all.filter((s) => s.info.running && s.info.status !== 'paused').length;
-  const needs = all.filter((s) => s.info.status === 'needs').length;
-  $('#sbSessions').textContent = `${running} running · ${all.length} sessions`;
+  const here = all.filter((s) => s.info.project === S.project);
+  const running = here.filter((s) => s.info.running && s.info.status !== 'paused').length;
+  const elsewhere = all.filter((s) => s.info.project !== S.project && s.info.running && s.info.status !== 'paused').length;
+  const needs = all.filter((s) => s.info.status === 'needs').length; // counts every project: you want to know
+  $('#sbSessions').textContent = `${running} running · ${here.length} session${here.length === 1 ? '' : 's'}${elsewhere ? ` · ${elsewhere} running in other projects` : ''}`;
   $('#sbNeeds').textContent = needs ? `${needs} need${needs > 1 ? '' : 's'} you` : '';
   document.title = needs ? `(${needs}) meta` : 'meta';
 }
@@ -331,15 +334,22 @@ function langFor(p) {
   return map[ext] || 'plaintext';
 }
 
-/** The reader shows one pane at a time: md | code | diff | queue. */
+/** The reader shows one pane at a time. Files: md | code | diff. Panels: the rest. */
+const PANES = { md: '#mdView', code: '#codeView', diff: '#diffView', queue: '#queueView', search: '#searchView', git: '#gitView', timeline: '#timelineView', snippets: '#snippetsView' };
+const FILE_PANES = new Set(['md', 'code', 'diff']);
 function pane(name) {
-  $('#mdView').hidden = name !== 'md';
-  $('#codeView').hidden = name !== 'code';
-  $('#diffView').hidden = name !== 'diff';
-  $('#queueView').hidden = name !== 'queue';
-  $('#mentionBtn').hidden = name === 'queue';
+  for (const [k, sel] of Object.entries(PANES)) $(sel).hidden = k !== name;
+  $('#mentionBtn').hidden = !FILE_PANES.has(name);
   if (name !== 'diff') $('#revertBtn').hidden = true;
-  if (name === 'diff' || name === 'queue') $('#viewToggle').hidden = true;
+  if (name !== 'md' && name !== 'code') $('#viewToggle').hidden = true;
+}
+
+function openPanel(name, title, meta) {
+  S.open = { path: '', mode: name, isMd: false, data: null };
+  $('#readerTitle').textContent = title;
+  $('#readerMeta').textContent = meta;
+  showReader(true);
+  pane(name);
 }
 
 function showReader(show) {
@@ -350,12 +360,12 @@ function showReader(show) {
   requestAnimationFrame(() => { try { s?.fit.fit(); } catch { /* ignore */ } });
 }
 
-async function openFile(p, { keepScroll = false } = {}) {
+async function openFile(p, { keepScroll = false, line = 0 } = {}) {
   let data;
   try { data = await api.readFile(p); } catch (e) { return toast(e.message); }
   const isMd = data.html != null;
   const keep = S.open?.path === p && (S.open.mode === 'read' || S.open.mode === 'source');
-  const mode = keep ? S.open.mode : (isMd ? 'read' : 'source');
+  const mode = line ? 'source' : keep ? S.open.mode : (isMd ? 'read' : 'source');
   S.open = { path: p, mode, isMd, data };
   $('#readerTitle').textContent = base(p);
   $('#readerMeta').textContent = p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
@@ -369,7 +379,13 @@ async function openFile(p, { keepScroll = false } = {}) {
     return;
   }
   if (isMd && mode === 'read') await renderMarkdown(data, keepScroll);
-  else await renderCode(p, data.content);
+  else {
+    await renderCode(p, data.content);
+    if (line) {
+      codeEditor.revealLineInCenter(line);
+      codeEditor.setSelection({ startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1e4 });
+    }
+  }
 }
 
 async function renderMarkdown(data, keepScroll) {
@@ -527,11 +543,7 @@ async function renderChanges() {
 let queue = [];
 
 function openQueue() {
-  S.open = { path: '', mode: 'queue', isMd: false, data: null };
-  $('#readerTitle').textContent = 'Queue';
-  $('#readerMeta').textContent = 'runs unattended, one task at a time';
-  showReader(true);
-  pane('queue');
+  openPanel('queue', 'Queue', 'runs unattended, one task at a time');
   renderQueue();
   $('#queueTask').focus();
 }
@@ -590,6 +602,220 @@ function renderQueue() {
       actions);
   }));
   if (!mine.length) $('#queueList').append(el('p', { className: 'note', textContent: 'Nothing queued. Add tasks above, then press Run queue before you go to bed.' }));
+}
+
+// ---------- search (files + past chats)
+
+let searchScope = 'files';
+let searchTimer;
+
+function openSearch() {
+  openPanel('search', 'Search', S.project ? base(S.project) : '');
+  $('#searchInput').focus();
+  $('#searchInput').select();
+  runSearch();
+}
+
+function highlightText(text, q) {
+  const frag = document.createDocumentFragment();
+  if (!q) { frag.append(text); return frag; }
+  const lt = text.toLowerCase(), lq = q.toLowerCase();
+  let i = 0, j;
+  while ((j = lt.indexOf(lq, i)) >= 0) {
+    frag.append(text.slice(i, j), el('mark', { textContent: text.slice(j, j + q.length) }));
+    i = j + q.length;
+  }
+  frag.append(text.slice(i));
+  return frag;
+}
+
+async function runSearch() {
+  const q = $('#searchInput').value.trim();
+  const box = $('#searchResults');
+  if (q.length < 2) { box.replaceChildren(el('p', { className: 'note', textContent: 'Type at least 2 characters.' })); return; }
+  const scope = searchScope;
+  let results;
+  try { results = scope === 'files' ? await api.searchFiles(q) : await api.searchChats(q); } catch (e) { return toast(e.message); }
+  if (scope !== searchScope || q !== $('#searchInput').value.trim()) return; // a newer search started
+  if (!results.length) { box.replaceChildren(el('p', { className: 'note', textContent: 'No matches.' })); return; }
+  if (scope === 'files') {
+    const groups = new Map();
+    for (const r of results) { if (!groups.has(r.path)) groups.set(r.path, []); groups.get(r.path).push(r); }
+    box.replaceChildren(...[...groups].map(([p, hits]) => el('div', { className: 'rgroup' },
+      el('div', { className: 'rfile' }, base(p), el('span', { className: 'muted', textContent: p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '' })),
+      ...hits.slice(0, 20).map((h) => {
+        const b = el('button', { className: 'rhit' }, el('span', { className: 'ln', textContent: h.line }), el('span', { className: 'tx' }, highlightText(h.text, q)));
+        b.onclick = () => openFile(h.path, { line: h.line });
+        return b;
+      }))));
+    if (results.length >= 300) box.append(el('p', { className: 'note', textContent: 'Showing the first 300 matches.' }));
+  } else {
+    box.replaceChildren(...results.map((r) => {
+      const b = el('button', { className: 'rchat' },
+        el('span', { className: 'rt', textContent: r.title }),
+        el('span', { className: 'rs' }, highlightText(r.snippet, q)),
+        el('span', { className: 'rm', textContent: `${r.hits} match${r.hits > 1 ? 'es' : ''} · ${new Date(r.at).toLocaleString()}${r.sessionId ? ' · open in a tab' : ' · click to resume'}` }));
+      b.onclick = async () => {
+        if (r.sessionId && S.sessions.has(r.sessionId)) return activate(r.sessionId);
+        try {
+          const info = await api.resumeChat(r.claudeId, r.title, ...Object.values(estimateSize()));
+          if (!S.sessions.has(info.id)) makeTerm(info);
+          activate(info.id);
+        } catch (e) { toast(e.message); }
+      };
+      return b;
+    }));
+  }
+}
+
+// ---------- source control
+
+let gitState = null;
+let gitTimer;
+function scheduleGit() { clearTimeout(gitTimer); gitTimer = setTimeout(refreshGit, 800); }
+
+async function refreshGit() {
+  try { gitState = await api.gitStatus(); } catch { gitState = { repo: false }; }
+  const sum = $('#gitSummary');
+  if (!gitState.repo) sum.textContent = 'Not a git repository';
+  else {
+    const n = gitState.files.length;
+    sum.textContent = `${gitState.branch}${n ? ` · ${n} changed` : ' · clean'}${gitState.ahead ? ` · ${gitState.ahead} to push` : ''}`;
+  }
+  if (!$('#gitView').hidden) renderGit();
+}
+
+function openGit() {
+  openPanel('git', 'Source control', '');
+  refreshGit().then(() => $('#commitMsg').focus());
+}
+
+function renderGit() {
+  const g = gitState;
+  if (!g?.repo) { $('#gitFiles').replaceChildren(el('p', { className: 'note', textContent: 'This folder is not a git repository.' })); return; }
+  $('#gitBranch').textContent = g.branch;
+  $('#gitAhead').textContent = g.ahead ? `${g.ahead} commit(s) to push` : g.ahead === 0 ? 'up to date' : '';
+  const staged = g.files.filter((f) => f.staged);
+  const unstaged = g.files.filter((f) => f.unstaged || f.untracked);
+  const row = (f, isStaged) => {
+    const r = el('div', { className: 'grow-row' });
+    const open = el('button', { className: 'gp', textContent: f.path, title: f.path });
+    open.onclick = async () => {
+      try {
+        const d = await api.gitDiff(f.path, isStaged);
+        openDiff({ path: f.path, before: d.before, after: d.after, meta: isStaged ? 'staged' : f.untracked ? 'new file' : 'not staged' });
+      } catch (e) { toast(e.message); }
+    };
+    const act = el('button', { className: 'gbtn', textContent: isStaged ? 'Unstage' : 'Stage' });
+    act.onclick = async () => { try { await (isStaged ? api.gitUnstage([f.path]) : api.gitStage([f.path])); refreshGit(); } catch (e) { toast(e.message); } };
+    r.append(el('span', { className: 'gc', textContent: f.untracked ? 'U' : (isStaged ? f.code[0] : f.code.slice(-1)) }), open, act);
+    return r;
+  };
+  const group = (title, files, isStaged) => {
+    if (!files.length) return null;
+    const all = el('button', { className: 'link', textContent: isStaged ? 'Unstage all' : 'Stage all' });
+    all.onclick = async () => { try { await (isStaged ? api.gitUnstage(files.map((f) => f.path)) : api.gitStage(files.map((f) => f.path))); refreshGit(); } catch (e) { toast(e.message); } };
+    return el('div', {}, el('div', { className: 'ggroup-title' }, `${title} (${files.length})`, all), ...files.map((f) => row(f, isStaged)));
+  };
+  $('#gitFiles').replaceChildren(...[group('STAGED', staged, true), group('CHANGES', unstaged, false)].filter(Boolean));
+  if (!g.files.length) $('#gitFiles').append(el('p', { className: 'note', textContent: 'Nothing to commit. Working tree clean.' }));
+  $('#gitCommit').disabled = !staged.length;
+}
+
+// ---------- timeline
+
+function openTimeline() {
+  const s = S.sessions.get(S.active);
+  if (!s || s.info.kind !== 'claude') return toast('Pick a Claude tab first');
+  openPanel('timeline', 'Timeline', s.info.name);
+  renderTimeline();
+}
+
+async function renderTimeline() {
+  if ($('#timelineView').hidden) return;
+  const s = S.sessions.get(S.active);
+  if (!s) return;
+  let events = [];
+  try { events = await api.timeline(s.info.id); } catch (e) { return toast(e.message); }
+  const list = $('#timelineList');
+  const undo = async (evId, label) => {
+    if (!confirm(`Undo ${label}? Files go back to how they were at that point.`)) return;
+    try { const r = await api.timelineUndoTo(s.info.id, evId); toast(`Undid ${r.edits} edit(s) in ${r.files} file(s)`); renderTimeline(); renderChanges(); } catch (e) { toast(e.message); }
+  };
+  list.replaceChildren(...[...events].reverse().map((ev, idx) => {
+    const main = el('button', { className: 'tl-main' },
+      el('span', { className: 'tl-file', textContent: ev.file }),
+      el('span', { className: 'tl-meta', textContent: `${ev.created ? 'created' : ev.deleted ? 'deleted' : ev.tool.toLowerCase()} · ${new Date(ev.at).toLocaleTimeString()}` }));
+    main.onclick = async () => {
+      try { const d = await api.timelineDiff(s.info.id, ev.id); openDiff({ path: d.file, before: d.before, after: d.after, meta: `one edit · ${new Date(ev.at).toLocaleTimeString()}` }); } catch (e) { toast(e.message); }
+    };
+    const u = el('button', { className: 'ghost small tl-undo', textContent: idx === 0 ? 'Latest' : 'Undo back to here', disabled: idx === 0 });
+    if (idx > 0) u.onclick = () => undo(ev.id, `the ${idx} edit(s) after this one`);
+    return el('div', { className: 'tl-item' }, el('span', { className: 'tl-dot' }), main, u);
+  }));
+  if (events.length) {
+    const all = el('button', { className: 'ghost small danger', textContent: 'Undo everything in this session' });
+    all.onclick = () => undo('start', `all ${events.length} edit(s) in this session`);
+    list.append(all);
+  } else list.append(el('p', { className: 'note', textContent: 'No edits yet in this tab.' }));
+}
+
+// ---------- snippets
+
+let snippets = [];
+let snipSel = 0;
+let snipItems = [];
+
+async function openSnippetPicker() {
+  const s = S.sessions.get(S.active);
+  if (!s) return toast('Open a session first');
+  snippets = await api.snippets();
+  $('#snip').hidden = false;
+  $('#snipInput').value = '';
+  snipSel = 0;
+  renderSnipList();
+  $('#snipInput').focus();
+}
+function closeSnippetPicker() { $('#snip').hidden = true; S.sessions.get(S.active)?.term.focus(); }
+
+function renderSnipList() {
+  const q = $('#snipInput').value.trim().toLowerCase();
+  snipItems = snippets.filter((x) => !q || x.name.toLowerCase().includes(q) || x.text.toLowerCase().includes(q));
+  snipSel = Math.min(snipSel, Math.max(0, snipItems.length - 1));
+  $('#snipList').replaceChildren(...snipItems.map((x, i) => {
+    const r = el('button', { className: 'qrow' + (i === snipSel ? ' sel' : '') },
+      el('span', { className: 'qn', textContent: x.name }), el('span', { className: 'qd', textContent: x.text }));
+    r.onclick = () => insertSnippet(x, false);
+    return r;
+  }));
+  if (!snipItems.length) $('#snipList').append(el('div', { className: 'qrow muted', textContent: 'No snippets match' }));
+}
+
+function insertSnippet(x, sendNow) {
+  closeSnippetPicker();
+  const s = S.sessions.get(S.active);
+  if (!s) return;
+  s.term.paste(x.text); // bracketed paste: newlines stay in the prompt instead of submitting it
+  if (sendNow) setTimeout(() => api.write(s.info.id, '\r'), 60);
+  s.term.focus();
+}
+
+async function openSnippetManager() {
+  snippets = await api.snippets();
+  openPanel('snippets', 'Snippets', `${snippets.length} saved`);
+  renderSnippetManager();
+}
+
+function renderSnippetManager() {
+  $('#snippetList').replaceChildren(...snippets.map((x) => {
+    const name = el('input', { value: x.name, 'aria-label': 'Snippet name' });
+    const text = el('textarea', { value: x.text, rows: 3, 'aria-label': 'Snippet text' });
+    const save = el('button', { className: 'ghost small', textContent: 'Save' });
+    const del = el('button', { className: 'ghost small danger', textContent: 'Delete' });
+    save.onclick = async () => { x.name = name.value; x.text = text.value; snippets = await api.setSnippets(snippets); toast('Saved'); };
+    del.onclick = async () => { snippets = await api.setSnippets(snippets.filter((y) => y !== x)); renderSnippetManager(); };
+    return el('div', { className: 'snip-edit' }, name, text, el('div', { className: 'row-actions' }, del, save));
+  }));
 }
 
 // ---------- tab menu + handoff
@@ -792,6 +1018,7 @@ async function enterProject(dir, alreadySet = false) {
   const target = list.find((s) => s.info.id === want) || list[0];
   renderSessions();
   renderQueue();
+  refreshGit();
   if (target) activate(target.info.id);
   else { $('#noSession').hidden = false; renderChanges(); }
 }
@@ -816,12 +1043,21 @@ function onKey(e) {
     if (e.key === 'ArrowUp') { e.preventDefault(); quickSel = Math.max(quickSel - 1, 0); return renderQuick(); }
     if (e.key === 'Enter') { e.preventDefault(); if (quickItems[quickSel]) pickQuick(quickItems[quickSel], e.altKey); return; }
   }
+  if (!$('#snip').hidden) {
+    if (e.key === 'Escape') { e.preventDefault(); return closeSnippetPicker(); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); snipSel = Math.min(snipSel + 1, snipItems.length - 1); return renderSnipList(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); snipSel = Math.max(snipSel - 1, 0); return renderSnipList(); }
+    if (e.key === 'Enter') { e.preventDefault(); if (snipItems[snipSel]) insertSnippet(snipItems[snipSel], e.ctrlKey); return; }
+  }
   if (!$('#menu').hidden && e.key === 'Escape') return hideMenu();
   if (!isAppShortcut(e)) return;
   e.preventDefault();
   e.stopPropagation();
   const k = e.key.toLowerCase();
   const list = projectSessions();
+  if (e.shiftKey && k === 'f') return S.project && openSearch();
+  if (e.shiftKey && k === 'g') return S.project && openGit();
+  if (e.shiftKey && k === 'p') return openSnippetPicker();
   if (k === 't') return newSession(e.shiftKey ? 'shell' : 'claude');
   if (k === 'w') return S.active && closeSession(S.active);
   if (k === 'p') return S.project && openQuick('open');
@@ -886,12 +1122,47 @@ async function boot() {
     if (viewing && touched.includes(S.open.path)) openFile(S.open.path, { keepScroll: true });
     if (!$('#quick').hidden) renderQuick();
     scheduleChanges();
+    scheduleGit();
   });
   api.onTokens((t) => { S.tokens = t; renderTokens(); });
-  api.onChanges(({ id }) => { if (id === S.active) scheduleChanges(); });
+  api.onChanges(({ id }) => { if (id === S.active) { scheduleChanges(); renderTimeline(); } });
   api.onQueue((q) => { queue = q; renderQueue(); });
 
   $('#openQueue').onclick = openQueue;
+  $('#openGit').onclick = openGit;
+  $('#openTimeline').onclick = openTimeline;
+  $('#searchInput').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 250); };
+  for (const b of document.querySelectorAll('#searchView .seg button')) {
+    b.onclick = () => {
+      searchScope = b.dataset.scope;
+      for (const x of document.querySelectorAll('#searchView .seg button')) x.classList.toggle('on', x === b);
+      runSearch();
+      $('#searchInput').focus();
+    };
+  }
+  $('#gitRefresh').onclick = refreshGit;
+  $('#gitCommit').onclick = async () => {
+    try { await api.gitCommit($('#commitMsg').value); $('#commitMsg').value = ''; toast('Committed'); refreshGit(); } catch (e) { toast(e.message); }
+  };
+  $('#gitPush').onclick = async () => {
+    $('#gitPush').disabled = true;
+    try { await api.gitPush(); toast('Pushed'); refreshGit(); } catch (e) { toast(e.message); } finally { $('#gitPush').disabled = false; }
+  };
+  $('#gitSuggest').onclick = async () => {
+    const b = $('#gitSuggest');
+    b.disabled = true;
+    b.textContent = 'Claude is writing…';
+    try { $('#commitMsg').value = await api.gitSuggest(); } catch (e) { toast(e.message); } finally { b.disabled = false; b.textContent = 'Write message with Claude'; }
+  };
+  $('#commitMsg').onkeydown = (e) => { if (e.key === 'Enter' && e.ctrlKey) $('#gitCommit').click(); };
+  $('#snipInput').oninput = () => { snipSel = 0; renderSnipList(); };
+  $('#snip').onclick = (e) => { if (e.target === $('#snip')) closeSnippetPicker(); };
+  $('#manageSnippets').onclick = () => { closeSnippetPicker(); openSnippetManager(); };
+  $('#addSnippet').onclick = async () => {
+    snippets = await api.setSnippets([...snippets, { name: 'New snippet', text: '' }]);
+    renderSnippetManager();
+    $('#snippetList').lastElementChild?.querySelector('input')?.select();
+  };
   $('#queueForm').onsubmit = async (e) => {
     e.preventDefault();
     try {

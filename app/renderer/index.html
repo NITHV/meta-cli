@@ -39,12 +39,16 @@
       <div class="side-head"><span>FILES</span><span id="changedCount" class="accent"></span></div>
       <div id="tree" class="scroll"></div>
       <div class="side-section">
-        <div class="side-head"><span>CHANGES</span><span id="changesCount" class="muted"></span></div>
+        <div class="side-head"><span>CHANGES <span id="changesCount" class="muted"></span></span><button id="openTimeline" class="link" title="Every edit in this session, with undo to any point">Timeline</button></div>
         <div id="changeList" class="scroll capped"></div>
       </div>
       <div class="side-section">
         <div class="side-head"><span>SESSIONS</span></div>
         <div id="sessionList"></div>
+      </div>
+      <div class="side-section">
+        <div class="side-head"><span>SOURCE CONTROL</span><button id="openGit" class="link" title="Ctrl+Shift+G">Open</button></div>
+        <div id="gitSummary" class="row muted"></div>
       </div>
       <div class="side-section">
         <div class="side-head"><span>QUEUE</span><button id="openQueue" class="link">Open</button></div>
@@ -82,6 +86,37 @@
       <article id="mdView" class="markdown scroll"></article>
       <div id="codeView"></div>
       <div id="diffView" hidden></div>
+      <div id="searchView" class="scroll panel" hidden>
+        <label class="search-box">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4.3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m9.3 9.3 3.2 3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <input id="searchInput" placeholder="Search files and past Claude chats" aria-label="Search" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="seg" role="group" aria-label="Search in">
+          <button data-scope="files" class="on">Files</button>
+          <button data-scope="chats">Past chats</button>
+        </div>
+        <div id="searchResults"></div>
+      </div>
+      <div id="gitView" class="scroll panel" hidden>
+        <div class="git-head"><span id="gitBranch" class="branch"></span><span id="gitAhead" class="muted"></span><span class="spacer"></span><button id="gitRefresh" class="ghost small">Refresh</button></div>
+        <textarea id="commitMsg" rows="4" placeholder="Commit message"></textarea>
+        <div class="git-actions">
+          <button id="gitSuggest" class="ghost small" title="Claude (Haiku) writes a message from the staged diff">Write message with Claude</button>
+          <span class="spacer"></span>
+          <button id="gitPush" class="ghost small">Push</button>
+          <button id="gitCommit" class="primary">Commit</button>
+        </div>
+        <div id="gitFiles"></div>
+      </div>
+      <div id="timelineView" class="scroll panel" hidden>
+        <p class="note">Every edit Claude made with its file tools in this tab, newest first. Click one to see that edit; "Undo back to here" reverts everything after it.</p>
+        <div id="timelineList"></div>
+      </div>
+      <div id="snippetsView" class="scroll panel" hidden>
+        <p class="note">Snippets are prompts you reuse. Ctrl+Shift+P inserts one into the active Claude tab without sending it.</p>
+        <div id="snippetList"></div>
+        <button id="addSnippet" class="ghost small">+ New snippet</button>
+      </div>
       <div id="queueView" class="scroll" hidden>
         <form id="queueForm" class="qform">
           <textarea id="queueTask" rows="3" placeholder="A task to run unattended, e.g. &quot;add tests for the parser&quot;"></textarea>
@@ -118,6 +153,8 @@
     <span class="spacer"></span>
     <span>Ctrl+T new Claude</span>
     <span>Ctrl+P open file</span>
+    <span>Ctrl+Shift+F search</span>
+    <span>Ctrl+Shift+P snippets</span>
     <span>Ctrl+B files</span>
     <span>Ctrl+\ reader</span>
   </footer>
@@ -141,6 +178,18 @@
       </label>
       <div id="quickList"></div>
       <div class="quick-foot"><span>Enter open</span><span>Alt+Enter mention in Claude</span></div>
+    </div>
+  </div>
+
+  <div id="snip" class="modal" hidden>
+    <div class="quick-card" role="dialog" aria-label="Insert snippet">
+      <label class="quick-input">
+        <span class="accent" aria-hidden="true">❯</span>
+        <input id="snipInput" placeholder="Insert a saved prompt" aria-label="Snippet" autocomplete="off" spellcheck="false">
+        <kbd>Esc</kbd>
+      </label>
+      <div id="snipList"></div>
+      <div class="quick-foot"><span>Enter insert</span><span>Ctrl+Enter insert and send</span><button id="manageSnippets" class="link">Manage snippets</button></div>
     </div>
   </div>
 
