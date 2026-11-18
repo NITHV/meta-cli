@@ -44,7 +44,9 @@ function context() {
 function cmdAgents(): number {
   for (const a of adapters) {
     const v = a.detect();
-    console.log(`${bold(a.name.padEnd(10))} ${v ? green('installed') + dim(' ' + v) : red('not found')}`);
+    const hint = v ? a.setupHint?.() : null;
+    const state = !v ? red('not found') : hint ? styleText('yellow', 'needs setup') : green('ready');
+    console.log(`${bold(a.name.padEnd(10))} ${state}${v ? dim(' ' + v) : ''}${hint ? '\n' + ' '.repeat(11) + dim(hint) : ''}`);
   }
   return 0;
 }

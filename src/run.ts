@@ -31,7 +31,10 @@ export function parseSpecs(list: string, defaultModel?: string): RunSpec[] {
     return { adapter: getAdapter(name), model: model || defaultModel };
   });
   for (const name of new Set(specs.map((s) => s.adapter.name))) {
-    if (!getAdapter(name).detect()) throw new Error(`${name} is not installed or not on PATH`);
+    const a = getAdapter(name);
+    if (!a.detect()) throw new Error(`${name} is not installed or not on PATH`);
+    const hint = a.setupHint?.();
+    if (hint) console.error(`warning: ${name} ${hint}`); // warn, don't block: detection can be wrong
   }
   return specs;
 }

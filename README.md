@@ -1,4 +1,4 @@
-# meta-cli
+﻿# meta-cli
 
 CLI-first orchestrator for coding agents. Each run gets its own git worktree, so
 agents never touch your working tree until you `apply`.
@@ -36,6 +36,7 @@ type stripping, and state lives in `.meta/meta.db` (built-in `node:sqlite`).
 
 - [x] `run`, `diff`, `apply`, `discard`, `show`, `runs`
 - [x] `race` with a concurrency cap, `stats` per agent:model
-- [ ] `gemini` and `codex` adapters
+- [x] `gemini` adapter (headless stream-json; run `gemini` once to sign in)
+- [ ] `codex` adapter
 - [ ] Ink TUI
 - [ ] `meta serve`: the same core over HTTP for an IDE/phone UI

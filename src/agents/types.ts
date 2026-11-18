@@ -15,12 +15,21 @@ export interface RunOptions {
   model?: string;
 }
 
+/** Stateful per-run parser: some agents stream text in fragments that must be buffered. */
+export interface LineParser {
+  line(line: string): AgentEvent[];
+  /** Called once when stdout closes, to flush anything buffered. */
+  end(): AgentEvent[];
+}
+
 export interface AgentAdapter {
   name: string;
   /** Returns the installed version, or null if the agent isn't installed. */
   detect(): string | null;
-  /** The headless command line for one task. */
+  /** A warning if the agent is installed but can't run yet (e.g. not signed in). */
+  setupHint?(): string | null;
+  /** The headless command line for one task. Arguments are passed without a shell. */
   command(o: RunOptions): { cmd: string; args: string[] };
-  /** Map one line of the agent's stdout to zero or more events. */
-  parse(line: string): AgentEvent[];
+  /** A fresh parser for one run. Never share one between runs. */
+  parser(): LineParser;
 }

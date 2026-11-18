@@ -6,6 +6,9 @@
   "bin": {
     "meta": "bin/meta.js"
   },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\""
+  },
   "engines": {
     "node": ">=24"
   },

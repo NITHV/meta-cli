@@ -1,8 +1,9 @@
 import type { AgentAdapter } from './types.ts';
 import { claude } from './claude.ts';
+import { gemini } from './gemini.ts';
 
-// Registry. Next adapters: codex (`codex exec --json`), gemini (`gemini -p`), aider.
-export const adapters: AgentAdapter[] = [claude];
+// Registry. Next adapters: codex (`codex exec --json`), aider.
+export const adapters: AgentAdapter[] = [claude, gemini];
 
 export function getAdapter(name: string): AgentAdapter {
   const a = adapters.find((x) => x.name === name);
