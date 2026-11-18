@@ -71,6 +71,7 @@ export function init(ctx) {
       ...S.recent.filter((p) => p !== S.project).slice(0, 6).map((p) => ({ label: `Switch to ${ctx.base(p)}`, hint: p, run: () => ctx.enterProject(p) })),
     ];
     if (S.open?.path) cmds.push({ label: `Open ${ctx.base(S.open.path)} in VS Code`, run: () => openInCode(S.open.path) });
+    cmds.push(...(ctx.extraCommands?.() || []));
     if (s) {
       cmds.push({ label: `Rename "${s.info.name}"`, run: () => ctx.renameActive() });
       if (s.info.kind === 'claude') cmds.push({ label: 'Continue this tab in a new tab', run: () => ctx.handoff(s) });
@@ -332,6 +333,7 @@ export function init(ctx) {
 
   return {
     openPalette,
+    openPicker,
     pickerKey,
     toggleFocus,
     termCreated,

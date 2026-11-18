@@ -42,6 +42,15 @@ contextBridge.exposeInMainWorld('meta', {
   setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
   memory: () => ipcRenderer.invoke('memory:info'),
 
+  writeFile: (rel, content) => ipcRenderer.invoke('fs:write', rel, content),
+  renderMd: (text) => ipcRenderer.invoke('md:render', text),
+  exportPdf: (rel, html) => ipcRenderer.invoke('export:pdf', rel, html),
+  notes: (id) => ipcRenderer.invoke('notes:get', id),
+  setNotes: (id, text) => ipcRenderer.invoke('notes:set', id, text),
+  history: () => ipcRenderer.invoke('history:list'),
+  sessionStats: (claudeId) => ipcRenderer.invoke('stats:session', claudeId),
+  titlebarTheme: (color, symbolColor) => ipcRenderer.invoke('theme:titlebar', color, symbolColor),
+
   timeline: (id) => ipcRenderer.invoke('timeline:list', id),
   timelineDiff: (id, ev) => ipcRenderer.invoke('timeline:diff', id, ev),
   timelineUndoTo: (id, ev) => ipcRenderer.invoke('timeline:undoTo', id, ev),

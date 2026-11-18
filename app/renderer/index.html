@@ -62,10 +62,12 @@
       <div class="side-section">
         <div class="side-head"><span>TOKENS</span></div>
         <div id="tokenPanel" class="tokens"></div>
+        <div id="statsLine" class="row muted stats"></div>
       </div>
     </aside>
 
     <main id="terminals">
+      <div id="compareBar" class="comparebar" hidden><span>Comparing</span><strong id="compareNames"></strong><span class="spacer"></span><button id="compareClose" class="ghost small">Stop comparing</button></div>
       <div id="noSession" class="empty" hidden>
         <p>No sessions yet.</p>
         <button id="emptyNew" class="primary big">+ New Claude session</button>
@@ -85,6 +87,9 @@
           <button data-mode="source">Source</button>
         </div>
         <button id="revertBtn" class="ghost small danger" title="Put this file back the way it was before this session edited it" hidden>Undo changes</button>
+        <button id="editBtn" class="ghost small" title="Edit this file here (Markdown gets a live preview)">Edit</button>
+        <button id="doneBtn" class="primary" style="height:24px" title="Leave edit mode" hidden>Done</button>
+        <button id="pdfBtn" class="ghost small" title="Export this document to PDF">PDF</button>
         <button id="codeBtn" class="ghost small" title="Open this file in VS Code">VS Code</button>
         <button id="mentionBtn" class="ghost small" title="Mention this file in the active Claude session (Ctrl+I asks about the selection)">@ Mention</button>
         <button id="closeReader" class="icon" aria-label="Close file">✕</button>
@@ -117,6 +122,11 @@
       <div id="timelineView" class="scroll panel" hidden>
         <p class="note">Every edit Claude made with its file tools in this tab, newest first. Click one to see that edit; "Undo back to here" reverts everything after it.</p>
         <div id="timelineList"></div>
+      </div>
+      <div id="notesView" class="panel" hidden>
+        <p class="note">Your scratchpad for this tab. Saved automatically. Claude only sees it when you press Send.</p>
+        <textarea id="notesText" class="notes-text" placeholder="Ideas, TODOs, things to tell Claude later…"></textarea>
+        <div class="git-actions"><span class="spacer"></span><button id="notesSend" class="ghost small">Send to Claude</button></div>
       </div>
       <div id="portsView" class="scroll panel" hidden>
         <p class="note">Servers listening on a port that were started from one of your IDE terminals. Refreshes every few seconds.</p>
@@ -188,6 +198,23 @@
       </label>
       <div id="quickList"></div>
       <div class="quick-foot"><span>Enter open</span><span>Alt+Enter mention in Claude</span></div>
+    </div>
+  </div>
+
+  <div id="askModal" class="modal" hidden>
+    <div class="quick-card dialog" role="dialog" aria-labelledby="askTitle">
+      <h2 id="askTitle"></h2>
+      <div id="askField"></div>
+      <div class="dialog-actions"><button id="askCancel" class="ghost">Cancel</button><button id="askOk" class="primary">OK</button></div>
+    </div>
+  </div>
+
+  <div id="broadcastModal" class="modal" hidden>
+    <div class="quick-card dialog" role="dialog" aria-labelledby="broadcastTitle">
+      <h2 id="broadcastTitle">Send one prompt to several tabs</h2>
+      <textarea id="broadcastText" rows="5" placeholder="The same task for each tab, so you can compare answers"></textarea>
+      <div id="broadcastTabs" class="chk-list"></div>
+      <div class="dialog-actions"><button id="broadcastCancel" class="ghost">Cancel</button><button id="broadcastSend" class="primary">Send</button></div>
     </div>
   </div>
 

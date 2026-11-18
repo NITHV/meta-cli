@@ -22,6 +22,24 @@
   color-scheme: dark;
 }
 
+/* Same tokens, other palettes. Status colors keep their meaning in every theme. */
+:root[data-theme="light"] {
+  --base: #FBFBFC; --surface: #FFFFFF; --raised: #F1F3F6; --line: #E2E5EA; --line-strong: #CDD2DA;
+  --text: #1D2330; --text-2: #3D4556; --muted: #5B6375; --faint: #6B7385;
+  --accent: #C2410C; --accent-ink: #FFFFFF; --accent-bg: #FDE7DC;
+  --working: #A16207; --needs: #1D4ED8; --needs-bg: #E6EEFF; --done: #15803D; --error: #B91C1C;
+  color-scheme: light;
+}
+:root[data-theme="contrast"] {
+  --base: #000000; --surface: #000000; --raised: #1A1A1A; --line: #FFFFFF; --line-strong: #FFFFFF;
+  --text: #FFFFFF; --text-2: #FFFFFF; --muted: #E0E0E0; --faint: #D0D0D0;
+  --accent: #FFB000; --accent-ink: #000000; --accent-bg: #3A2A00;
+  --working: #FFD400; --needs: #7CC4FF; --needs-bg: #001A33; --done: #5CFF9D; --error: #FF6B6B;
+}
+:root[data-theme="light"] .markdown, :root[data-theme="light"] .markdown h1, :root[data-theme="light"] .markdown h2, :root[data-theme="light"] .markdown h3,
+:root[data-theme="light"] .markdown th, :root[data-theme="light"] .qrow .qn, :root[data-theme="light"] .row.file.active { color: var(--text); }
+:root[data-theme="light"] .quick-input input, :root[data-theme="light"] .search-box input { color: var(--text); }
+
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; overflow: hidden; }
 body { background: var(--base); color: var(--text); font: 13px/1.4 var(--sans); display: flex; flex-direction: column; }
@@ -256,6 +274,30 @@ body.focus #sidebar, body.focus #reader, body.focus #resizer, body.focus #status
 .port-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--base); }
 .port-row .port { font: 600 14px var(--mono); color: var(--text); min-width: 7ch; }
 .port-row .pname { flex: 1; color: var(--text-2); font-size: 12px; }
+
+/* ---------- batch 5: edit split, compare, notes, dialogs */
+#reader.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+#reader.split .reader-head { grid-column: 1 / -1; }
+/* explicit rows: #mdView comes before #codeView in the DOM, and auto-placement won't backtrack */
+#reader.split #codeView { grid-column: 1; grid-row: 2; min-height: 0; border-right: 1px solid var(--line); }
+#reader.split #mdView { grid-column: 2; grid-row: 2; min-height: 0; padding: 18px 20px; }
+#terminals.compare .term.left { right: 50%; border-right: 1px solid var(--line); }
+#terminals.compare .term.right { left: 50%; }
+#terminals.compare .term { top: 34px; }
+.comparebar { position: absolute; top: 0; left: 0; right: 0; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--line); z-index: 3; font-size: 12px; color: var(--muted); }
+.comparebar strong { color: var(--text); font-weight: 600; }
+.notes-text { flex: 1; min-height: 240px; resize: none; background: var(--base); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 12px; font: 13px/1.55 var(--mono); }
+.notes-text:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.stats { font-size: 11px; padding-top: 2px; }
+.dialog { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.dialog h2 { margin: 0; font-size: 15px; color: var(--text); }
+.dialog input, .dialog textarea { width: 100%; background: var(--base); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 13px/1.45 var(--sans); }
+.dialog textarea { resize: vertical; }
+.dialog input:focus, .dialog textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.dialog-actions button.ghost { padding: 6px 14px; }
+.chk-list { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--text-2); }
+.chk-list .chk { display: flex; gap: 6px; align-items: center; }
 
 /* ---------- status bar */
 #statusbar { display: flex; align-items: center; gap: 16px; height: 28px; padding: 0 14px; background: var(--surface); border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); flex: none; }

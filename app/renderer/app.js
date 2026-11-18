@@ -1,8 +1,10 @@
 // meta IDE window. Everything privileged goes through window.meta (preload.js).
 import { init as initFeatures } from './features.js';
+import { init as initContent } from './content.js';
 
 const api = window.meta;
 let F = null; // feature hooks from features.js, set in boot()
+let C = null; // content hooks from content.js (editing, themes, notes…), set in boot()
 const $ = (s) => document.querySelector(s);
 const el = (tag, props = {}, ...kids) => {
   const n = Object.assign(document.createElement(tag), props);
@@ -51,7 +53,7 @@ const THEME = {
 function isAppShortcut(e) {
   if (!e.ctrlKey || e.altKey) return false;
   const k = e.key.toLowerCase();
-  if (e.shiftKey) return ['t', 'w', 'f', 'g', 'p'].includes(k);
+  if (e.shiftKey) return ['t', 'w', 'f', 'g', 'p', 'h'].includes(k);
   return k === 't' || k === 'p' || k === 'b' || k === 'k' || k === '\\' || k === 'tab' || /^[1-9]$/.test(k);
 }
 
@@ -62,7 +64,7 @@ function makeTerm(info) {
     fontFamily: '"Cascadia Code", "Cascadia Mono", Consolas, monospace',
     fontSize: 13,
     lineHeight: 1.15,
-    theme: THEME,
+    theme: C ? C.termTheme() : THEME,
     cursorBlink: true,
     scrollback: 10000,
     allowProposedApi: true,
@@ -105,13 +107,16 @@ async function attach(s) {
 async function activate(id) {
   const s = S.sessions.get(id);
   if (!s) return;
+  if (S.compare && !S.compare.includes(id)) C.stopCompare();
   S.active = id;
   api.setActive(id);
   for (const x of S.sessions.values()) x.el.hidden = x !== s;
   $('#noSession').hidden = true;
+  if (S.compare) for (const x of S.sessions.values()) x.el.hidden = !S.compare.includes(x.info.id);
   renderSessions();
   renderChanges();
   renderTimeline();
+  C.renderStats();
   await attach(s);
   requestAnimationFrame(() => { try { s.fit.fit(); } catch { /* ignore */ } s.term.focus(); });
 }
@@ -321,6 +326,10 @@ function loadMonaco() {
     window.require.config({ paths: { vs: '../node_modules/monaco-editor/min/vs' } });
     window.require(['vs/editor/editor.main'], () => {
       const m = window.monaco;
+      m.editor.defineTheme('meta-light', {
+        base: 'vs', inherit: true, rules: [],
+        colors: { 'editor.background': '#FFFFFF', 'diffEditor.insertedLineBackground': '#15803D14', 'diffEditor.removedLineBackground': '#B91C1C14' },
+      });
       m.editor.defineTheme('meta', {
         base: 'vs-dark', inherit: true, rules: [],
         colors: {
@@ -333,10 +342,11 @@ function loadMonaco() {
       // Creating the editor with the theme is what installs the theme's token colors,
       // which Markdown code blocks (colorize) also use. setTheme() alone doesn't.
       codeEditor = m.editor.create($('#codeView'), {
-        readOnly: true, automaticLayout: true, minimap: { enabled: false }, theme: 'meta',
+        readOnly: true, automaticLayout: true, minimap: { enabled: false }, theme: C.monacoTheme(),
         fontFamily: '"Cascadia Code", Consolas, monospace', fontSize: 13, scrollBeyondLastLine: false,
         renderLineHighlight: 'none', domReadOnly: true,
       });
+      codeEditor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => C.save());
       resolve(m);
     });
   });
@@ -350,10 +360,15 @@ function langFor(p) {
 }
 
 /** The reader shows one pane at a time. Files: md | code | diff. Panels: the rest. */
-const PANES = { md: '#mdView', code: '#codeView', diff: '#diffView', queue: '#queueView', search: '#searchView', git: '#gitView', timeline: '#timelineView', snippets: '#snippetsView', ports: '#portsView' };
+const PANES = { md: '#mdView', code: '#codeView', diff: '#diffView', queue: '#queueView', search: '#searchView', git: '#gitView', timeline: '#timelineView', snippets: '#snippetsView', ports: '#portsView', notes: '#notesView' };
 const FILE_PANES = new Set(['md', 'code', 'diff']);
 function pane(name) {
   for (const [k, sel] of Object.entries(PANES)) $(sel).hidden = k !== name;
+  const editing = C?.isEditing();
+  $('#editBtn').hidden = !(name === 'md' || name === 'code') || editing || !!S.open?.data?.binary;
+  $('#pdfBtn').hidden = name !== 'md' || editing;
+  $('#doneBtn').hidden = !editing;
+  if (!editing) $('#reader').classList.remove('split');
   $('#mentionBtn').hidden = !FILE_PANES.has(name);
   $('#codeBtn').hidden = !FILE_PANES.has(name);
   if (name !== 'diff') $('#revertBtn').hidden = true;
@@ -361,6 +376,11 @@ function pane(name) {
 }
 
 function openPanel(name, title, meta) {
+  if (C?.isEditing()) {
+    // A panel replaces the file view: finish editing first (asks before discarding unsaved changes).
+    C.stopEdit().then((stopped) => { if (stopped) openPanel(name, title, meta); });
+    return;
+  }
   S.open = { path: '', mode: name, isMd: false, data: null };
   $('#readerTitle').textContent = title;
   $('#readerMeta').textContent = meta;
@@ -377,6 +397,10 @@ function showReader(show) {
 }
 
 async function openFile(p, { keepScroll = false, line = 0 } = {}) {
+  if (C?.isEditing() && C.editingPath() !== p) {
+    await C.stopEdit();
+    if (C.isEditing()) return; // user chose to keep editing
+  }
   let data;
   try { data = await api.readFile(p); } catch (e) { return toast(e.message); }
   const isMd = data.html != null;
@@ -404,11 +428,10 @@ async function openFile(p, { keepScroll = false, line = 0 } = {}) {
   }
 }
 
-async function renderMarkdown(data, keepScroll) {
+async function renderMarkdown(data, keepScroll, preview = false) {
   const view = $('#mdView');
   const top = keepScroll ? view.scrollTop : 0;
-  pane('md');
-  $('#viewToggle').hidden = false;
+  if (!preview) { pane('md'); $('#viewToggle').hidden = false; }
   view.innerHTML = data.html; // produced by markdown-it in the main process with raw HTML disabled
   const dir = S.open.path.includes('/') ? S.open.path.slice(0, S.open.path.lastIndexOf('/') + 1) : '';
 
@@ -435,7 +458,7 @@ async function renderMarkdown(data, keepScroll) {
   const blocks = [...view.querySelectorAll('.mermaid-src')];
   if (blocks.length) {
     window.mermaid.initialize({
-      startOnLoad: false, theme: 'dark', securityLevel: 'strict',
+      startOnLoad: false, theme: C.mermaidTheme(), securityLevel: 'strict',
       themeVariables: { background: '#0E0F12', primaryColor: '#1E2128', primaryBorderColor: '#F28C4B', primaryTextColor: '#E6E8EE', lineColor: '#9AA1B2', fontFamily: 'Segoe UI, sans-serif' },
     });
     let n = 0;
@@ -512,7 +535,7 @@ async function openDiff({ path: p, before, after, meta, onRevert }) {
   showReader(true);
   pane('diff');
   diffEditor ??= m.editor.createDiffEditor($('#diffView'), {
-    readOnly: true, automaticLayout: true, minimap: { enabled: false }, theme: 'meta', renderSideBySide: false,
+    readOnly: true, automaticLayout: true, minimap: { enabled: false }, theme: C.monacoTheme(), renderSideBySide: false,
     fontFamily: '"Cascadia Code", Consolas, monospace', fontSize: 13, scrollBeyondLastLine: false, originalEditable: false,
   });
   const old = diffEditor.getModel();
@@ -841,6 +864,7 @@ function tabMenu(s, x, y, tabEl) {
   const iso = s.info.isolated;
   showMenu(x, y, [
     ['Rename', () => startRename(s, tabEl)],
+    ['Notes', () => { activate(s.info.id); C.openNotes(); }],
     s.info.kind === 'claude' ? ['Continue in a new tab', () => handoff(s)] : null,
     iso ? null : undefined,
     iso ? ['Apply branch to working tree', () => F.isolatedAction(s, 'apply')] : null,
@@ -1101,6 +1125,7 @@ function onKey(e) {
   if (e.shiftKey && k === 'f') return S.project && openSearch();
   if (e.shiftKey && k === 'g') return S.project && openGit();
   if (e.shiftKey && k === 'p') return openSnippetPicker();
+  if (e.shiftKey && k === 'h') return C.openHistory();
   if (k === 't') return newSession(e.shiftKey ? 'shell' : 'claude');
   if (k === 'w') return S.active && closeSession(S.active);
   if (k === 'p') return S.project && openQuick('open');
@@ -1120,6 +1145,12 @@ async function boot() {
     newSession, openQuick, openSearch, openGit, openSnippetPicker, openSnippetManager, openTimeline, openQueue,
     toggleSidebar, pickFolder, enterProject, openFile, renameActive, handoff, closeSession, dropSession,
     makeTerm, activate, estimateSize, projectSessions, openPanel, codeEditor: () => codeEditor,
+    extraCommands: () => C.commands(),
+  });
+  C = initContent({
+    S, api, $, el, toast, store, base, F,
+    openFile, openPanel, openQuick, showReader, activate, projectSessions, renderMarkdown,
+    codeEditor: () => codeEditor, baseTermTheme: THEME,
   });
   document.addEventListener('keydown', onKey, true);
   document.addEventListener('pointerdown', (e) => { if (!$('#menu').hidden && !$('#menu').contains(e.target)) hideMenu(); });
@@ -1129,7 +1160,10 @@ async function boot() {
   $('#projectBtn').onclick = projectMenu;
   $('#openFolder').onclick = pickFolder;
   $('#searchBtn').onclick = () => S.project && openQuick('open');
-  $('#closeReader').onclick = () => showReader(false);
+  $('#closeReader').onclick = async () => { if (await C.stopEdit()) showReader(false); };
+  $('#editBtn').onclick = () => C.startEdit();
+  $('#doneBtn').onclick = () => C.stopEdit();
+  $('#pdfBtn').onclick = () => C.exportPdf();
   $('#mentionBtn').onclick = () => S.open && mention(S.open.path);
   $('#quickInput').oninput = () => { quickSel = 0; renderQuick(); };
   $('#quick').onclick = (e) => { if (e.target === $('#quick')) closeQuick(); };
@@ -1159,6 +1193,7 @@ async function boot() {
     s.info.status = status;
     if (status !== 'paused') { s.info.running = true; s.info.asleep = false; }
     F.status(id, status, prev);
+    if (status === 'done' && id === S.active) C.renderStats();
     renderSessions();
   });
   api.onFocusSession((id) => {
@@ -1174,6 +1209,7 @@ async function boot() {
     renderTree();
     const viewing = S.open && (S.open.mode === 'read' || S.open.mode === 'source');
     if (viewing && touched.includes(S.open.path)) openFile(S.open.path, { keepScroll: true });
+    if (C.isEditing() && touched.includes(C.editingPath())) toast(`${C.editingPath()} changed on disk. Your editor copy is kept; saving overwrites it.`);
     if (!$('#quick').hidden) renderQuick();
     scheduleChanges();
     scheduleGit();

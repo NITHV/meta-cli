@@ -948,7 +948,15 @@ function serveApp(req) {
   }
   const file = path.normalize(path.join(APP_DIR, decodeURIComponent(u.pathname)));
   if (!file.startsWith(APP_DIR + path.sep)) return new Response('forbidden', { status: 403 });
-  return net.fetch(pathToFileURL(file).toString());
+  return noStore(net.fetch(pathToFileURL(file).toString()));
+}
+
+/** Local app files are tiny: never cache them, so a reload always shows the current code. */
+async function noStore(pending) {
+  const res = await pending;
+  const headers = new Headers(res.headers);
+  headers.set('cache-control', 'no-store');
+  return new Response(res.body, { status: res.status, headers });
 }
 
 function createWindow() {
@@ -990,11 +998,14 @@ app.whenReady().then(async () => {
 });
 
 // Feature modules get the pieces of the core they need.
-require('./lib/workspace').init({
+const featureCtx = {
   get state() { return state; }, // loadState() replaces the object later, so read it live
-  ipcMain, app, shell, clipboard, Notification, saveState, send, live, spawnSession, publicSession,
+  ipcMain, app, shell, clipboard, dialog, Notification, saveState, send, live, spawnSession, publicSession,
   inProject, inProjectOf, cleanEnv, workDir, getWin: () => win, appDir: APP_DIR, transcriptFile, conversationTail,
-});
+  renderMarkdown,
+};
+require('./lib/workspace').init(featureCtx);
+require('./lib/content').init(featureCtx);
 
 app.on('window-all-closed', () => {
   for (const l of live.values()) { try { l.proc.kill(); } catch { /* gone */ } }
