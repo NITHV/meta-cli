@@ -35,10 +35,13 @@ function saveState() {
     fs.writeFileSync(STATE_FILE(), JSON.stringify(state, null, 2));
   }, 200);
 }
+/** Where a session's process runs: its own git worktree when isolated, else the project. */
+const workDir = (s) => s.cwd || s.project;
 const send = (channel, data) => { if (win && !win.isDestroyed()) win.webContents.send(channel, data); };
 const publicSession = (s) => {
   const l = live.get(s.id);
   return { id: s.id, project: s.project, name: s.name, kind: s.kind, claudeId: s.claudeId, model: s.model || '', createdAt: s.createdAt,
+    isolated: s.isolated ? { branch: s.isolated.branch } : null, asleep: !l && !!s.asleep,
     running: !!l, status: l ? l.status : 'paused' };
 };
 
@@ -166,8 +169,8 @@ function readSnapshot(abs) {
 function trackChange(tab, file, event, tool) {
   const s = state.sessions.find((x) => x.id === tab);
   if (!s) return;
-  const abs = path.resolve(s.project, file);
-  const rel = path.relative(s.project, abs);
+  const abs = path.resolve(workDir(s), file);
+  const rel = path.relative(workDir(s), abs);
   if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return; // outside the project
   const key = rel.split(path.sep).join('/');
   const m = changesFor(tab);
@@ -211,7 +214,7 @@ ipcMain.handle('timeline:undoTo', (_e, tab, eventId) => {
   const restore = new Map(); // file -> content from before its earliest later edit
   for (const ev of later) if (!restore.has(ev.file)) restore.set(ev.file, ev.before);
   for (const [file, content] of restore) {
-    const abs = inProjectOf(s.project, file);
+    const abs = inProjectOf(workDir(s), file);
     if (content === null) fs.rmSync(abs, { force: true });
     else { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.writeFileSync(abs, content); }
   }
@@ -229,7 +232,7 @@ ipcMain.handle('changes:list', (_e, tab) => {
   const s = state.sessions.find((x) => x.id === tab);
   if (!s) return [];
   return [...changesFor(tab)].map(([p, c]) => {
-    const now = readNow(s.project, p);
+    const now = readNow(workDir(s), p);
     const kind = c.before === null ? (now === null ? 'gone' : 'new') : now === null ? 'deleted' : now === c.before ? 'same' : 'edited';
     return { path: p, kind, at: c.at };
   }).filter((c) => c.kind !== 'same' && c.kind !== 'gone').sort((a, b) => b.at - a.at);
@@ -239,14 +242,14 @@ ipcMain.handle('changes:diff', (_e, tab, rel) => {
   const s = state.sessions.find((x) => x.id === tab);
   const c = s && changesFor(tab).get(rel);
   if (!c) throw new Error('no change recorded for that file');
-  return { before: c.before ?? '', after: readNow(s.project, rel) ?? '' };
+  return { before: c.before ?? '', after: readNow(workDir(s), rel) ?? '' };
 });
 
 ipcMain.handle('changes:revert', (_e, tab, rel) => {
   const s = state.sessions.find((x) => x.id === tab);
   const c = s && changesFor(tab).get(rel);
   if (!c) throw new Error('no change recorded for that file');
-  const abs = inProjectOf(s.project, rel);
+  const abs = inProjectOf(workDir(s), rel);
   if (c.before === null) fs.rmSync(abs, { force: true });
   else { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.writeFileSync(abs, c.before); }
   changesFor(tab).delete(rel);
@@ -643,10 +646,11 @@ function spawnSession(s, cols, rows, prompt) {
     file = 'powershell.exe';
     args = ['-NoLogo'];
   }
-  const proc = pty.spawn(file, args, { name: 'xterm-256color', cols, rows, cwd: s.project, env, useConpty: true });
-  const l = { proc, buffer: '', status: 'idle', pending: '', timer: null };
+  const proc = pty.spawn(file, args, { name: 'xterm-256color', cols, rows, cwd: workDir(s), env, useConpty: true });
+  const l = { proc, buffer: '', status: 'idle', pending: '', timer: null, lastActive: Date.now() };
   live.set(s.id, l);
   proc.onData((d) => {
+    l.lastActive = Date.now();
     l.buffer += d;
     if (l.buffer.length > MAX_BUFFER) l.buffer = l.buffer.slice(-MAX_BUFFER);
     l.pending += d;
@@ -656,7 +660,7 @@ function spawnSession(s, cols, rows, prompt) {
   proc.onExit(({ exitCode }) => {
     if (l.timer) { clearTimeout(l.timer); send('pty:data', { id: s.id, data: l.pending }); }
     live.delete(s.id);
-    send('pty:exit', { id: s.id, exitCode });
+    send('pty:exit', { id: s.id, exitCode, asleep: !!s.asleep });
     send('session:status', { id: s.id, status: 'paused' });
   });
   send('session:status', { id: s.id, status: 'idle' });
@@ -686,7 +690,7 @@ ipcMain.handle('session:attach', (_e, id, cols, rows) => {
   const s = state.sessions.find((x) => x.id === id);
   if (!s) throw new Error('no such session');
   let l = live.get(id);
-  if (!l) l = spawnSession(s, cols, rows); // paused tab: resume it now (idle tabs cost no RAM)
+  if (!l) { s.asleep = false; l = spawnSession(s, cols, rows); } // paused tab: resume it now (idle tabs cost no RAM)
   else try { l.proc.resize(cols, rows); } catch { /* exited */ }
   // The buffer already contains any output still waiting to be flushed: drop it so it isn't shown twice.
   if (l.timer) { clearTimeout(l.timer); l.timer = null; }
@@ -694,7 +698,12 @@ ipcMain.handle('session:attach', (_e, id, cols, rows) => {
   return { buffer: l.buffer, status: l.status };
 });
 
-ipcMain.on('session:write', (_e, id, data) => live.get(id)?.proc.write(data));
+ipcMain.on('session:write', (_e, id, data) => {
+  const l = live.get(id);
+  if (!l) return;
+  l.lastActive = Date.now();
+  l.proc.write(data);
+});
 ipcMain.on('session:resize', (_e, id, cols, rows) => {
   if (cols > 0 && rows > 0) try { live.get(id)?.proc.resize(cols, rows); } catch { /* exited */ }
 });
@@ -965,6 +974,13 @@ app.whenReady().then(async () => {
   if (arg) setProject(arg);
   else if (state.project) watchProject(state.project);
   createWindow();
+});
+
+// Feature modules get the pieces of the core they need.
+require('./lib/workspace').init({
+  get state() { return state; }, // loadState() replaces the object later, so read it live
+  ipcMain, app, shell, clipboard, Notification, saveState, send, live, spawnSession, publicSession,
+  inProject, inProjectOf, cleanEnv, workDir, getWin: () => win, appDir: APP_DIR, transcriptFile, conversationTail,
 });
 
 app.on('window-all-closed', () => {

@@ -241,6 +241,22 @@ button.danger:hover { border-color: var(--error); color: var(--error); }
 #snipList { max-height: 380px; overflow: auto; padding: 6px; }
 .quick-foot .link { margin-left: auto; }
 
+/* ---------- batch 4: palette, focus, errors, scripts, ports, links */
+#paletteList { max-height: 420px; overflow: auto; padding: 6px; }
+body.focus #sidebar, body.focus #reader, body.focus #resizer, body.focus #statusbar { display: none !important; }
+.errbar { position: absolute; left: 14px; right: 14px; bottom: 10px; display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 14px; border: 1px solid #5A2A2A; background: #261416; border-radius: 10px; color: #FFD6D6; z-index: 2; }
+.errbar span { flex: 1; }
+.errbar .primary { height: 28px; }
+.filelink { cursor: pointer; text-decoration: underline dotted var(--accent); text-underline-offset: 3px; }
+.filelink:hover { color: var(--accent); }
+.chips-wrap { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 14px 4px; }
+.chipbtn { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--text-2); }
+.chipbtn:hover { border-color: var(--accent); color: var(--text); }
+.branch-badge { color: var(--accent); font-size: 12px; }
+.port-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--base); }
+.port-row .port { font: 600 14px var(--mono); color: var(--text); min-width: 7ch; }
+.port-row .pname { flex: 1; color: var(--text-2); font-size: 12px; }
+
 /* ---------- status bar */
 #statusbar { display: flex; align-items: center; gap: 16px; height: 28px; padding: 0 14px; background: var(--surface); border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); flex: none; }
 #statusbar .needs { color: var(--needs); }

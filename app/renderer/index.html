@@ -27,6 +27,7 @@
       </button>
     </div>
     <div class="spacer"></div>
+    <button id="paletteBtn" class="nodrag search" title="All commands (Ctrl+K)"><kbd>Ctrl K</kbd></button>
     <button id="searchBtn" class="nodrag search" title="Open file (Ctrl+P)">
       <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="6" cy="6" r="4.3" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m9.3 9.3 3.2 3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       <kbd>Ctrl P</kbd>
@@ -45,6 +46,10 @@
       <div class="side-section">
         <div class="side-head"><span>SESSIONS</span></div>
         <div id="sessionList"></div>
+      </div>
+      <div id="scriptsSection" class="side-section" hidden>
+        <div class="side-head"><span>SCRIPTS</span></div>
+        <div id="scriptList" class="chips-wrap"></div>
       </div>
       <div class="side-section">
         <div class="side-head"><span>SOURCE CONTROL</span><button id="openGit" class="link" title="Ctrl+Shift+G">Open</button></div>
@@ -80,7 +85,8 @@
           <button data-mode="source">Source</button>
         </div>
         <button id="revertBtn" class="ghost small danger" title="Put this file back the way it was before this session edited it" hidden>Undo changes</button>
-        <button id="mentionBtn" class="ghost small" title="Mention this file in the active Claude session">@ Mention</button>
+        <button id="codeBtn" class="ghost small" title="Open this file in VS Code">VS Code</button>
+        <button id="mentionBtn" class="ghost small" title="Mention this file in the active Claude session (Ctrl+I asks about the selection)">@ Mention</button>
         <button id="closeReader" class="icon" aria-label="Close file">✕</button>
       </div>
       <article id="mdView" class="markdown scroll"></article>
@@ -111,6 +117,10 @@
       <div id="timelineView" class="scroll panel" hidden>
         <p class="note">Every edit Claude made with its file tools in this tab, newest first. Click one to see that edit; "Undo back to here" reverts everything after it.</p>
         <div id="timelineList"></div>
+      </div>
+      <div id="portsView" class="scroll panel" hidden>
+        <p class="note">Servers listening on a port that were started from one of your IDE terminals. Refreshes every few seconds.</p>
+        <div id="portList"></div>
       </div>
       <div id="snippetsView" class="scroll panel" hidden>
         <p class="note">Snippets are prompts you reuse. Ctrl+Shift+P inserts one into the active Claude tab without sending it.</p>
@@ -178,6 +188,17 @@
       </label>
       <div id="quickList"></div>
       <div class="quick-foot"><span>Enter open</span><span>Alt+Enter mention in Claude</span></div>
+    </div>
+  </div>
+
+  <div id="palette" class="modal" hidden>
+    <div class="quick-card" role="dialog" aria-label="Commands">
+      <label class="quick-input">
+        <span class="accent" aria-hidden="true">›</span>
+        <input id="paletteInput" placeholder="Type a command" aria-label="Command" autocomplete="off" spellcheck="false">
+        <kbd>Esc</kbd>
+      </label>
+      <div id="paletteList"></div>
     </div>
   </div>
 

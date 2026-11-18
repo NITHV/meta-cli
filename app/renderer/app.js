@@ -1,5 +1,8 @@
 // meta IDE window. Everything privileged goes through window.meta (preload.js).
+import { init as initFeatures } from './features.js';
+
 const api = window.meta;
+let F = null; // feature hooks from features.js, set in boot()
 const $ = (s) => document.querySelector(s);
 const el = (tag, props = {}, ...kids) => {
   const n = Object.assign(document.createElement(tag), props);
@@ -49,7 +52,7 @@ function isAppShortcut(e) {
   if (!e.ctrlKey || e.altKey) return false;
   const k = e.key.toLowerCase();
   if (e.shiftKey) return ['t', 'w', 'f', 'g', 'p'].includes(k);
-  return k === 't' || k === 'p' || k === 'b' || k === '\\' || k === 'tab' || /^[1-9]$/.test(k);
+  return k === 't' || k === 'p' || k === 'b' || k === 'k' || k === '\\' || k === 'tab' || /^[1-9]$/.test(k);
 }
 
 function makeTerm(info) {
@@ -71,11 +74,12 @@ function makeTerm(info) {
     if (isAppShortcut(e)) return false; // let the window handle it
     const k = e.key.toLowerCase();
     if (e.ctrlKey && k === 'c' && term.hasSelection()) { api.clipboardWrite(term.getSelection()); term.clearSelection(); return false; }
-    if (e.ctrlKey && k === 'v') { api.clipboardRead().then((t) => t && term.paste(t)); return false; }
+    if (e.ctrlKey && k === 'v') { F.paste(s); return false; } // text, or a screenshot saved as a file
     return true;
   });
   const s = { info, term, fit, el: node, attached: false, attaching: null };
   S.sessions.set(info.id, s);
+  F.termCreated(s);
   return s;
 }
 
@@ -119,6 +123,7 @@ function estimateSize() {
 
 async function newSession(kind = 'claude', opts = {}) {
   if (!S.project) return toast('Open a folder first');
+  F.beforeCreate();
   try {
     const model = kind === 'claude' ? store.get('meta.model', '') : '';
     const info = await api.createSession({ kind, model, ...estimateSize(), ...opts });
@@ -129,12 +134,20 @@ async function newSession(kind = 'claude', opts = {}) {
   }
 }
 
-async function closeSession(id) {
+async function closeSession(id, keepBranch = false) {
   const s = S.sessions.get(id);
   if (!s) return;
+  if (s.info.isolated && !keepBranch) return F.closeIsolated(s);
   const running = s.info.running && s.info.status !== 'paused';
-  if (running && !confirm(`Close "${s.info.name}"? ${s.info.kind === 'claude' ? 'You can resume the conversation later with claude --resume.' : ''}`)) return;
+  if (running && !keepBranch && !confirm(`Close "${s.info.name}"? ${s.info.kind === 'claude' ? 'You can resume the conversation later with claude --resume.' : ''}`)) return;
   await api.closeSession(id);
+  dropSession(id);
+}
+
+/** Remove a tab from the window (the main process has already dropped the session). */
+function dropSession(id) {
+  const s = S.sessions.get(id);
+  if (!s) return;
   s.term.dispose();
   s.el.remove();
   S.sessions.delete(id);
@@ -179,7 +192,9 @@ function renderSessions() {
     },
     el('span', { className: 'dot ' + st }),
     el('span', { textContent: s.info.kind === 'shell' ? `⌘ ${s.info.name}` : s.info.name }),
-    st === 'needs' || st === 'working' || st === 'done' ? el('span', { className: 'state ' + st, textContent: STATUS_LABEL[st] }) : null,
+    s.info.isolated ? el('span', { className: 'branch-badge', textContent: '⎇', title: s.info.isolated.branch }) : null,
+    st === 'needs' || st === 'working' || st === 'done' ? el('span', { className: 'state ' + st, textContent: STATUS_LABEL[st] })
+      : s.info.asleep ? el('span', { className: 'state', textContent: 'asleep' }) : null,
     close);
     tab.onclick = () => activate(s.info.id);
     tab.ondblclick = () => startRename(s, tab);
@@ -335,11 +350,12 @@ function langFor(p) {
 }
 
 /** The reader shows one pane at a time. Files: md | code | diff. Panels: the rest. */
-const PANES = { md: '#mdView', code: '#codeView', diff: '#diffView', queue: '#queueView', search: '#searchView', git: '#gitView', timeline: '#timelineView', snippets: '#snippetsView' };
+const PANES = { md: '#mdView', code: '#codeView', diff: '#diffView', queue: '#queueView', search: '#searchView', git: '#gitView', timeline: '#timelineView', snippets: '#snippetsView', ports: '#portsView' };
 const FILE_PANES = new Set(['md', 'code', 'diff']);
 function pane(name) {
   for (const [k, sel] of Object.entries(PANES)) $(sel).hidden = k !== name;
   $('#mentionBtn').hidden = !FILE_PANES.has(name);
+  $('#codeBtn').hidden = !FILE_PANES.has(name);
   if (name !== 'diff') $('#revertBtn').hidden = true;
   if (name !== 'md' && name !== 'code') $('#viewToggle').hidden = true;
 }
@@ -434,6 +450,7 @@ async function renderMarkdown(data, keepScroll) {
     }
   }
   view.scrollTop = top;
+  F.markdownRendered(view);
   // Syntax colors for fenced code: Monaco's tokenizer, our own palette (style.css .tk-*).
   const pres = [...view.querySelectorAll('.codeblock pre')].filter((p) => p.dataset.lang);
   if (pres.length) {
@@ -821,12 +838,17 @@ function renderSnippetManager() {
 // ---------- tab menu + handoff
 
 function tabMenu(s, x, y, tabEl) {
+  const iso = s.info.isolated;
   showMenu(x, y, [
     ['Rename', () => startRename(s, tabEl)],
     s.info.kind === 'claude' ? ['Continue in a new tab', () => handoff(s)] : null,
+    iso ? null : undefined,
+    iso ? ['Apply branch to working tree', () => F.isolatedAction(s, 'apply')] : null,
+    iso ? ['Open a pull request', () => F.isolatedAction(s, 'pr')] : null,
+    iso ? ['Discard branch', () => F.isolatedAction(s, 'discard')] : null,
     null,
     ['Close', () => closeSession(s.info.id), 'Ctrl Shift W'],
-  ].filter((x, i, a) => x !== null || (i > 0 && a[i - 1] !== null)));
+  ].filter((it) => it !== undefined).filter((it, i, a) => it !== null || (i > 0 && a[i - 1] !== null)));
 }
 
 async function handoff(s) {
@@ -960,6 +982,7 @@ function newMenu() {
   const pick = (m) => () => { store.set('meta.model', m); toast(`New Claude tabs use ${m || "Claude's default model"}`); };
   showMenu(r.left, r.bottom + 4, [
     ['New Claude session', () => newSession('claude'), 'Ctrl T'],
+    ['New isolated session (own branch)', () => F.newIsolated(), ''],
     ['Start Claude on a file…', () => openQuick('start'), ''],
     ['New PowerShell', () => newSession('shell'), 'Ctrl Shift T'],
     null,
@@ -1019,6 +1042,7 @@ async function enterProject(dir, alreadySet = false) {
   renderSessions();
   renderQueue();
   refreshGit();
+  F.renderScripts();
   if (target) activate(target.info.id);
   else { $('#noSession').hidden = false; renderChanges(); }
 }
@@ -1036,7 +1060,26 @@ function showStart(recent) {
 
 // =============================================================== wiring
 
+function toggleSidebar() {
+  $('#sidebar').classList.toggle('hidden');
+  try { S.sessions.get(S.active)?.fit.fit(); } catch { /* ignore */ }
+}
+
+function renameActive() {
+  const s = S.sessions.get(S.active);
+  const tab = $('#tabs .tab.active');
+  if (s && tab) startRename(s, tab);
+}
+
 function onKey(e) {
+  if (F.pickerKey(e)) { e.preventDefault(); e.stopPropagation(); return; }
+  if (e.key === 'F11') { e.preventDefault(); return F.toggleFocus(); }
+  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); e.stopPropagation(); return F.openPalette(); }
+  // Ctrl+I is Tab inside a terminal, so only take it when focus is in the reader.
+  if (e.ctrlKey && e.key.toLowerCase() === 'i' && !e.target.closest?.('.term') && !$('#reader').hidden) {
+    e.preventDefault();
+    return F.askAboutReaderSelection();
+  }
   if (!$('#quick').hidden) {
     if (e.key === 'Escape') { e.preventDefault(); return closeQuick(); }
     if (e.key === 'ArrowDown') { e.preventDefault(); quickSel = Math.min(quickSel + 1, quickItems.length - 1); return renderQuick(); }
@@ -1061,7 +1104,7 @@ function onKey(e) {
   if (k === 't') return newSession(e.shiftKey ? 'shell' : 'claude');
   if (k === 'w') return S.active && closeSession(S.active);
   if (k === 'p') return S.project && openQuick('open');
-  if (k === 'b') { $('#sidebar').classList.toggle('hidden'); return S.sessions.get(S.active)?.fit.fit(); }
+  if (k === 'b') return toggleSidebar();
   if (k === '\\') { if (S.open) return showReader($('#reader').hidden); return S.project && openQuick('open'); }
   if (k === 'tab') {
     const i = list.findIndex((s) => s.info.id === S.active);
@@ -1072,6 +1115,12 @@ function onKey(e) {
 }
 
 async function boot() {
+  F = initFeatures({
+    S, api, $, el, toast, store, base,
+    newSession, openQuick, openSearch, openGit, openSnippetPicker, openSnippetManager, openTimeline, openQueue,
+    toggleSidebar, pickFolder, enterProject, openFile, renameActive, handoff, closeSession, dropSession,
+    makeTerm, activate, estimateSize, projectSessions, openPanel, codeEditor: () => codeEditor,
+  });
   document.addEventListener('keydown', onKey, true);
   document.addEventListener('pointerdown', (e) => { if (!$('#menu').hidden && !$('#menu').contains(e.target)) hideMenu(); });
   $('#newClaude').onclick = () => newSession('claude');
@@ -1089,22 +1138,27 @@ async function boot() {
   }
   setupResizer();
 
-  api.onData(({ id, data }) => { const s = S.sessions.get(id); if (s?.attached) s.term.write(data); });
-  api.onExit(({ id, exitCode }) => {
+  api.onData(({ id, data }) => { const s = S.sessions.get(id); if (s?.attached) { s.term.write(data); F.ptyData(id, data); } });
+  api.onExit(({ id, exitCode, asleep }) => {
     const s = S.sessions.get(id);
     if (!s) return;
     s.attached = false;
     s.info.running = false;
     s.info.status = 'paused';
-    s.term.write(`\r\n\x1b[90m[session ended${exitCode ? ` (exit ${exitCode})` : ''}. Click the tab or press a key to resume]\x1b[0m\r\n`);
+    s.info.asleep = !!asleep;
+    s.term.write(asleep
+      ? '\r\n\x1b[90m[asleep to save memory. Press a key or click the tab to wake it: the conversation resumes]\x1b[0m\r\n'
+      : `\r\n\x1b[90m[session ended${exitCode ? ` (exit ${exitCode})` : ''}. Click the tab or press a key to resume]\x1b[0m\r\n`);
     const once = s.term.onData(() => { once.dispose(); s.term.reset(); attach(s); });
     renderSessions();
   });
   api.onStatus(({ id, status }) => {
     const s = S.sessions.get(id);
     if (!s) return;
+    const prev = s.info.status;
     s.info.status = status;
-    if (status !== 'paused') s.info.running = true;
+    if (status !== 'paused') { s.info.running = true; s.info.asleep = false; }
+    F.status(id, status, prev);
     renderSessions();
   });
   api.onFocusSession((id) => {
@@ -1129,6 +1183,8 @@ async function boot() {
   api.onQueue((q) => { queue = q; renderQueue(); });
 
   $('#openQueue').onclick = openQueue;
+  $('#codeBtn').onclick = () => S.open?.path && F.openInCode(S.open.path);
+  $('#paletteBtn').onclick = () => F.openPalette();
   $('#openGit').onclick = openGit;
   $('#openTimeline').onclick = openTimeline;
   $('#searchInput').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 250); };
