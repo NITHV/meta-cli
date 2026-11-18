@@ -56,6 +56,10 @@ export function changedFiles(root: string, base: string, branch: string): string
   return out ? out.split('\n') : [];
 }
 
+export function shortstat(root: string, base: string, branch: string): string {
+  return git(root, 'diff', '--shortstat', base, branch);
+}
+
 export function showDiff(root: string, base: string, branch: string): number {
   return spawnSync('git', ['diff', base, branch], { cwd: root, stdio: 'inherit' }).status ?? 1;
 }

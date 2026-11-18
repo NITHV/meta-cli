@@ -8,6 +8,8 @@ export type RunStatus = 'running' | 'done' | 'failed' | 'cancelled' | 'applied' 
 export interface RunRow {
   id: string;
   agent: string;
+  model: string | null;
+  race_id: string | null;
   task: string;
   base: string;
   branch: string;
@@ -20,6 +22,15 @@ export interface RunRow {
   cost_usd: number | null;
   turns: number | null;
   files_changed: number | null;
+}
+
+export interface StatRow {
+  who: string;
+  runs: number;
+  ok: number;
+  applied: number;
+  avg_turns: number | null;
+  avg_ms: number | null;
 }
 
 // One SQLite file per repo: the single source of truth for runs and their event logs.
@@ -41,8 +52,14 @@ export function openStore(root: string) {
     );
   `);
 
+  // Additive schema migrations: add columns that older databases lack.
+  const cols = new Set((db.prepare('PRAGMA table_info(runs)').all() as { name: string }[]).map((c) => c.name));
+  if (!cols.has('model')) db.exec('ALTER TABLE runs ADD COLUMN model TEXT');
+  if (!cols.has('race_id')) db.exec('ALTER TABLE runs ADD COLUMN race_id TEXT');
+
   const insRun = db.prepare(
-    'INSERT INTO runs (id, agent, task, base, branch, worktree, status, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    `INSERT INTO runs (id, agent, model, race_id, task, base, branch, worktree, status, started_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insEvent = db.prepare('INSERT INTO events (run_id, seq, ts, kind, data) VALUES (?, ?, ?, ?, ?)');
   const finish = db.prepare(
@@ -53,8 +70,8 @@ export function openStore(root: string) {
   const seqs = new Map<string, number>();
 
   return {
-    createRun(r: Pick<RunRow, 'id' | 'agent' | 'task' | 'base' | 'branch' | 'worktree'>) {
-      insRun.run(r.id, r.agent, r.task, r.base, r.branch, r.worktree, 'running', Date.now());
+    createRun(r: Pick<RunRow, 'id' | 'agent' | 'model' | 'race_id' | 'task' | 'base' | 'branch' | 'worktree'>) {
+      insRun.run(r.id, r.agent, r.model, r.race_id, r.task, r.base, r.branch, r.worktree, 'running', Date.now());
     },
 
     addEvent(runId: string, ev: AgentEvent) {
@@ -81,6 +98,20 @@ export function openStore(root: string) {
       if (rows.length === 0) throw new Error(`no run matching "${prefix}"`);
       if (rows.length > 1) throw new Error(`"${prefix}" matches ${rows.length} runs; use more characters`);
       return rows[0];
+    },
+
+    /** Per agent(:model): how often it succeeds and how often you keep its work. */
+    stats(): StatRow[] {
+      return db.prepare(`
+        SELECT agent || COALESCE(':' || model, '') AS who,
+               COUNT(*) AS runs,
+               SUM(exit_code = 0) AS ok,
+               SUM(status = 'applied') AS applied,
+               AVG(turns) AS avg_turns,
+               AVG(ended_at - started_at) AS avg_ms
+        FROM runs WHERE ended_at IS NOT NULL
+        GROUP BY who ORDER BY runs DESC
+      `).all() as unknown as StatRow[];
     },
 
     events(runId: string): AgentEvent[] {

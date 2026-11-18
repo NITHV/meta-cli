@@ -1,35 +1,44 @@
-import { parseArgs } from 'node:util';
-import { adapters, getAdapter } from './agents/index.ts';
-import { openStore } from './store.ts';
+import { parseArgs, styleText } from 'node:util';
+import { adapters } from './agents/index.ts';
+import type { AgentEvent } from './agents/types.ts';
+import { openStore, type RunRow } from './store.ts';
 import * as git from './git.ts';
-import { execute } from './runner.ts';
+import { label, newId, parseSpecs, pool, runOne, type RunOutcome } from './run.ts';
 import { ago, bold, dim, green, printEvent, red } from './fmt.ts';
 
 const HELP = `meta: run coding agents in isolated git worktrees
 
 Usage:
-  meta agents                      List supported agents and whether they're installed
-  meta run "<task>" [-a claude]    Run an agent on a task in a fresh worktree
-  meta runs                        List runs in this repo
-  meta show <run>                  Replay a run's events
-  meta diff <run>                  Show the changes a run made
-  meta apply <run>                 Squash a run's changes into your working tree (staged)
-  meta discard <run>               Delete a run's worktree and branch
+  meta agents                        List supported agents and whether they're installed
+  meta run "<task>" [-a claude]      Run an agent on a task in a fresh worktree
+  meta race "<task>" -a x -a y       Run several agents on the same task in parallel, then compare
+  meta runs                          List runs in this repo
+  meta show <run>                    Replay a run's events
+  meta diff <run>                    Show the changes a run made
+  meta apply <run>                   Squash a run's changes into your working tree (staged)
+  meta discard <run>                 Delete a run's worktree and branch
+  meta stats                         Success and keep rate per agent
 
 Options:
-  -a, --agent <name>   Agent to use (default: claude)
-  -m, --model <name>   Model to pass to the agent
-      --yolo           Let the agent run any tool without asking (bypass permissions)
+  -a, --agent <name>   Agent (default: claude). Repeat for race: -a claude:haiku -a claude:sonnet
+                       agent:model picks a model. A comma list works too, but quote it in PowerShell.
+  -m, --model <name>   Default model for agents without one
+      --max <n>        Race: max agents running at once (default: 2)
+      --yolo           Let agents run any tool without asking (bypass permissions)
       --json           Print events as NDJSON
   -h, --help           Show this help
 
 <run> is a run id or a unique prefix of one.
 `;
 
-type Opts = { agent: string; model?: string; yolo: boolean; json: boolean };
+type Opts = { agent: string; model?: string; max: string; yolo: boolean; json: boolean };
 
-function newId(): string {
-  return Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 4);
+function context() {
+  const root = git.root(process.cwd());
+  const base = git.head(root);
+  if (git.isDirty(root)) console.error(dim('note: uncommitted changes are not visible to agents (they start from HEAD)'));
+  git.excludeMeta(root);
+  return { root, base, store: openStore(root) };
 }
 
 function cmdAgents(): number {
@@ -42,48 +51,93 @@ function cmdAgents(): number {
 
 async function cmdRun(task: string, o: Opts): Promise<number> {
   if (!task) throw new Error('usage: meta run "<task>"');
-  const adapter = getAdapter(o.agent);
-  if (!adapter.detect()) throw new Error(`${adapter.name} is not installed or not on PATH`);
+  const specs = parseSpecs(o.agent, o.model);
+  if (specs.length !== 1) throw new Error('run takes one agent; use `meta race` for several');
+  const ctx = context();
 
-  const root = git.root(process.cwd());
-  const base = git.head(root);
-  if (git.isDirty(root)) console.error(dim('note: uncommitted changes are not visible to the agent (it starts from HEAD)'));
-  git.excludeMeta(root);
-
-  const store = openStore(root);
-  const id = newId();
-  const { path, branch } = git.addWorktree(root, id, base);
-  store.createRun({ id, agent: adapter.name, task, base, branch, worktree: path });
-  if (!o.json) console.log(dim(`run ${id} · ${adapter.name} · worktree .meta/worktrees/${id}`));
-
-  const result = await execute(adapter, { task, cwd: path, yolo: o.yolo, model: o.model }, (ev) => {
-    store.addEvent(id, ev);
-    printEvent(ev, o.json);
-  });
-
-  git.commitAll(path, `meta ${id}: ${task}`);
-  const files = git.changedFiles(root, base, branch); // also catches commits the agent made itself
-  const status = result.cancelled ? 'cancelled' : result.ok ? 'done' : 'failed';
-  store.finishRun(id, {
-    status,
-    exitCode: result.exitCode,
-    summary: result.done?.summary,
-    costUsd: result.done?.costUsd,
-    turns: result.done?.turns,
-    filesChanged: files.length,
+  const out = await runOne(ctx, specs[0], task, { yolo: o.yolo }, {
+    onStart: (id) => { if (!o.json) console.log(dim(`run ${id} · ${label(specs[0])} · worktree .meta/worktrees/${id}`)); },
+    onEvent: (_id, ev) => printEvent(ev, o.json),
   });
 
   if (!o.json) {
     console.log();
-    if (files.length) {
-      console.log(`${bold(String(files.length))} file(s) changed:`);
-      for (const f of files) console.log(`  ${f}`);
-      console.log(dim(`\nreview: meta diff ${id}   apply: meta apply ${id}   drop: meta discard ${id}`));
+    if (out.files.length) {
+      console.log(`${bold(String(out.files.length))} file(s) changed:`);
+      for (const f of out.files) console.log(`  ${f}`);
+      console.log(dim(`\nreview: meta diff ${out.id}   apply: meta apply ${out.id}   drop: meta discard ${out.id}`));
     } else {
-      console.log(dim(`no file changes. clean up with: meta discard ${id}`));
+      console.log(dim(`no file changes. clean up with: meta discard ${out.id}`));
     }
   }
-  return result.ok ? 0 : 1;
+  return out.status === 'done' ? 0 : 1;
+}
+
+const COLORS = ['cyan', 'magenta', 'yellow', 'blue', 'green'] as const;
+
+async function cmdRace(task: string, o: Opts): Promise<number> {
+  if (!task) throw new Error('usage: meta race "<task>" -a claude:haiku,claude:sonnet');
+  const specs = parseSpecs(o.agent, o.model);
+  if (specs.length < 2) throw new Error('race needs at least two agents, e.g. -a claude:haiku,claude:sonnet');
+  const max = Math.max(1, Number.parseInt(o.max, 10) || 2);
+  const ctx = context();
+  const raceId = newId();
+
+  // Unique, colored tag per contestant so interleaved output stays readable.
+  const tags = specs.map((s, i) => {
+    const dup = specs.filter((x) => label(x) === label(s)).length > 1;
+    return styleText(COLORS[i % COLORS.length], `[${label(s)}${dup ? '#' + (i + 1) : ''}]`);
+  });
+
+  if (!o.json) console.log(dim(`race ${raceId} · ${specs.length} agents · max ${max} at once`));
+
+  const tasks = specs.map((spec, i) => async (): Promise<RunOutcome | null> => {
+    try {
+      return await runOne(ctx, spec, task, { yolo: o.yolo, raceId }, {
+        onStart: (id) => { if (!o.json) console.log(`${tags[i]} ${dim('started run ' + id)}`); },
+        onEvent: (id, ev) => {
+          if (o.json) return void process.stdout.write(JSON.stringify({ run: id, ...ev }) + '\n');
+          printRaceEvent(tags[i], ev);
+        },
+      });
+    } catch (err) {
+      console.error(`${tags[i]} ${red('error: ' + (err instanceof Error ? err.message : String(err)))}`);
+      return null;
+    }
+  });
+  const results = await pool(tasks, max);
+
+  if (!o.json) {
+    console.log('\n' + bold('results'));
+    results.forEach((r, i) => {
+      if (!r) return void console.log(`  ${tags[i]} ${red('did not run')}`);
+      const st = (r.status === 'done' ? green : red)(r.status.padEnd(9)); // pad before coloring
+      const t = `${(r.durationMs / 1000).toFixed(1)}s`;
+      console.log(`  ${bold(r.id)} ${tags[i]} ${st} ${t.padStart(7)}  ${r.turns ?? '-'} turns  ${r.shortstat || dim('no changes')}`);
+    });
+    console.log(dim('\ncompare: meta diff <id>   keep one: meta apply <id>   drop the rest: meta discard <id>'));
+  }
+  return results.some((r) => r?.status === 'done') ? 0 : 1;
+}
+
+/** Race output is compact: progress lines only. Full text is in `meta show`. */
+function printRaceEvent(tag: string, ev: AgentEvent): void {
+  switch (ev.kind) {
+    case 'tool': {
+      const d = ev.detail.length > 80 ? ev.detail.slice(0, 77) + '...' : ev.detail;
+      console.log(`${tag} ${dim(`→ ${ev.name} ${d}`)}`);
+      break;
+    }
+    case 'tool_result':
+      if (!ev.ok) console.log(`${tag} ${red('✗ ' + ev.preview.slice(0, 80))}`);
+      break;
+    case 'done':
+      console.log(`${tag} ${ev.ok ? green('finished') : red('failed')}`);
+      break;
+    case 'log':
+      console.log(`${tag} ${dim(ev.text)}`);
+      break;
+  }
 }
 
 function cmdRuns(): number {
@@ -95,19 +149,40 @@ function cmdRuns(): number {
   }
   for (const r of runs) {
     const color = r.status === 'failed' ? red : r.status === 'done' || r.status === 'applied' ? green : dim;
-    const task = r.task.length > 50 ? r.task.slice(0, 47) + '...' : r.task;
+    const task = r.task.length > 44 ? r.task.slice(0, 41) + '...' : r.task;
+    const who = (r.agent + (r.model ? ':' + r.model : '')).padEnd(14);
+    const race = r.race_id ? dim(' race ' + r.race_id) : '';
     console.log(
-      `${bold(r.id)}  ${color(r.status.padEnd(9))} ${r.agent.padEnd(8)} ${dim(ago(r.started_at).padEnd(8))} ` +
-        `${String(r.files_changed ?? '-').padStart(3)} files  ${task}`,
+      `${bold(r.id)}  ${color(r.status.padEnd(9))} ${who} ${dim(ago(r.started_at).padEnd(8))} ` +
+        `${String(r.files_changed ?? '-').padStart(3)} files  ${task}${race}`,
     );
   }
+  return 0;
+}
+
+function cmdStats(): number {
+  const rows = openStore(git.root(process.cwd())).stats();
+  if (!rows.length) {
+    console.log(dim('no finished runs yet'));
+    return 0;
+  }
+  const pct = (n: number, d: number) => (d ? `${Math.round((100 * n) / d)}%` : '-');
+  console.log(dim(`${'agent'.padEnd(18)} ${'runs'.padStart(4)} ${'success'.padStart(8)} ${'kept'.padStart(6)} ${'turns'.padStart(6)} ${'avg time'.padStart(9)}`));
+  for (const r of rows) {
+    console.log(
+      `${bold(r.who.padEnd(18))} ${String(r.runs).padStart(4)} ${pct(r.ok, r.runs).padStart(8)} ` +
+        `${pct(r.applied, r.runs).padStart(6)} ${(r.avg_turns?.toFixed(1) ?? '-').padStart(6)} ` +
+        `${(r.avg_ms != null ? (r.avg_ms / 1000).toFixed(1) + 's' : '-').padStart(9)}`,
+    );
+  }
+  console.log(dim('\nsuccess = agent exited cleanly; kept = you applied its work'));
   return 0;
 }
 
 function cmdShow(ref: string, o: Opts): number {
   const store = openStore(git.root(process.cwd()));
   const run = store.findRun(ref);
-  if (!o.json) console.log(dim(`run ${run.id} · ${run.agent} · ${run.status} · ${run.task}`));
+  if (!o.json) console.log(dim(`run ${run.id} · ${run.agent}${run.model ? ':' + run.model : ''} · ${run.status} · ${run.task}`));
   for (const ev of store.events(run.id)) printEvent(ev, o.json);
   return 0;
 }
@@ -129,7 +204,13 @@ function cmdApply(ref: string): number {
   git.remove(root, run.worktree, run.branch);
   store.setStatus(run.id, 'applied');
   console.log(green(`applied ${run.id}. changes are staged; review with \`git diff --cached\` and commit.`));
+  const rivals = run.race_id ? siblings(store.listRuns(), run) : [];
+  if (rivals.length) console.log(dim(`other runs in this race: ${rivals.map((r) => r.id).join(' ')} (meta discard <id>)`));
   return 0;
+}
+
+function siblings(all: RunRow[], run: RunRow): RunRow[] {
+  return all.filter((r) => r.race_id === run.race_id && r.id !== run.id && r.status !== 'discarded' && r.status !== 'applied');
 }
 
 function cmdDiscard(ref: string): number {
@@ -146,14 +227,17 @@ async function main(): Promise<number> {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
-      agent: { type: 'string', short: 'a', default: 'claude' },
+      agent: { type: 'string', short: 'a', multiple: true },
       model: { type: 'string', short: 'm' },
+      max: { type: 'string', default: '2' },
       yolo: { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   });
-  const o = values as Opts & { help: boolean };
+  // -a may repeat (-a x -a y) or be a quoted comma list; both become one list.
+  const agentList = (values.agent as string[] | undefined)?.join(',') || 'claude';
+  const o = { ...values, agent: agentList } as Opts & { help: boolean };
   const [cmd, ...rest] = positionals;
   if (!cmd || o.help) {
     process.stdout.write(HELP);
@@ -166,7 +250,9 @@ async function main(): Promise<number> {
   switch (cmd) {
     case 'agents': return cmdAgents();
     case 'run': return cmdRun(rest.join(' '), o);
+    case 'race': return cmdRace(rest.join(' '), o);
     case 'runs': return cmdRuns();
+    case 'stats': return cmdStats();
     case 'show': return cmdShow(needRef(), o);
     case 'diff': return cmdDiff(needRef());
     case 'apply': return cmdApply(needRef());
