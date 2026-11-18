@@ -27,7 +27,7 @@ export function execute(a: AgentAdapter, opts: RunOptions, onEvent: (ev: AgentEv
 
   // Show paths relative to the worktree instead of long absolute ones.
   const prefixes = [opts.cwd.replace(/\//g, '\\'), opts.cwd.replace(/\\/g, '/')].map((p) => p.replace(/[\\/]?$/, ''));
-  const relativize = (s: string) => prefixes.reduce((acc, p) => acc.split(p + '\\').join('').split(p + '/').join(''), s);
+  const relativize = (s: string) => prefixes.includes(s.replace(/[\\/]$/, '')) ? '.' : prefixes.reduce((acc, p) => acc.split(p + '\\').join('').split(p + '/').join(''), s);
 
   const emit = (events: AgentEvent[]) => {
     for (let ev of events) {

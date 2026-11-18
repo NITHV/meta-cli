@@ -97,6 +97,41 @@ test('agy: tool step reported only as DONE still yields call + result', () => {
   ]);
 });
 
+// Captured from a live agy 1.5.11 run: denied command ends in state ERROR, result carries denied_actions.
+test('agy: live run with denied command and API error', () => {
+  const ev = feed([
+    step({ step_index: 1, state: 'DONE', step_type: 'error_message', duration_seconds: 0 }),
+    step({ step_index: 3, state: 'ACTIVE', step_type: 'tool', tool_name: 'run_command',
+      tool_info: { name: 'run_command', parameters: { CommandLine: 'dir' } } }),
+    step({ step_index: 3, state: 'ERROR', step_type: 'tool', tool_name: 'run_command',
+      tool_info: { name: 'run_command', parameters: { CommandLine: 'dir' },
+        error: { type: 'TOOL_ERROR', message: 'permission check failed for unsandboxed "dir"' } } }),
+    { event: 'result', result: { status: 'ERROR', response: '', error: 'API error: UNAVAILABLE (code 503)',
+      duration_seconds: 9.3, num_turns: 1, denied_actions: [{ action: 'command', display_name: 'Bash' }], finished_reason: 'error' } },
+  ], agy.parser());
+  assert.deepEqual(ev, [
+    { kind: 'tool', name: 'run_command', detail: 'dir' },
+    { kind: 'tool_result', ok: false, preview: 'permission check failed for unsandboxed "dir"' },
+    { kind: 'log', text: 'agy denied: Bash (use --yolo to allow)' },
+    { kind: 'done', ok: false, summary: 'API error: UNAVAILABLE (code 503)', turns: 1, durationMs: 9300 },
+  ]);
+});
+
+test('agy: run stopped by a denial counts as failed', () => {
+  const ev = feed([{ event: 'result', result: { status: 'SUCCESS', response: '', num_turns: 1,
+    denied_actions: [{ action: 'command', display_name: 'Bash' }] } }], agy.parser());
+  assert.equal((ev.at(-1) as any).ok, false);
+  assert.match((ev.at(-1) as any).summary, /denied/);
+});
+
+test('agy: safe mode tells the agent shell is unavailable; yolo does not', () => {
+  if (!agy.detect()) return;
+  const safe = agy.command({ task: 'fix it', cwd: '.', yolo: false }).args;
+  const yolo = agy.command({ task: 'fix it', cwd: '.', yolo: true }).args;
+  assert.match(safe[safe.indexOf('-p') + 1], /shell commands are not available/);
+  assert.equal(yolo[yolo.indexOf('-p') + 1], 'fix it');
+});
+
 test('agy: failed result', () => {
   const ev = feed([{ event: 'result', result: { status: 'INTERRUPTED', num_turns: 1 } }], agy.parser());
   assert.equal(ev.length, 1);

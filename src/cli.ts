@@ -169,15 +169,16 @@ function cmdStats(): number {
     return 0;
   }
   const pct = (n: number, d: number) => (d ? `${Math.round((100 * n) / d)}%` : '-');
-  console.log(dim(`${'agent'.padEnd(18)} ${'runs'.padStart(4)} ${'success'.padStart(8)} ${'kept'.padStart(6)} ${'turns'.padStart(6)} ${'avg time'.padStart(9)}`));
+  const w = Math.max(5, ...rows.map((r) => r.who.length)) + 1;
+  console.log(dim(`${'agent'.padEnd(w)} ${'runs'.padStart(4)} ${'success'.padStart(8)} ${'kept'.padStart(6)} ${'turns'.padStart(6)} ${'avg time'.padStart(9)}`));
   for (const r of rows) {
     console.log(
-      `${bold(r.who.padEnd(18))} ${String(r.runs).padStart(4)} ${pct(r.ok, r.runs).padStart(8)} ` +
+      `${bold(r.who.padEnd(w))} ${String(r.runs).padStart(4)} ${pct(r.ok, r.runs).padStart(8)} ` +
         `${pct(r.applied, r.runs).padStart(6)} ${(r.avg_turns?.toFixed(1) ?? '-').padStart(6)} ` +
         `${(r.avg_ms != null ? (r.avg_ms / 1000).toFixed(1) + 's' : '-').padStart(9)}`,
     );
   }
-  console.log(dim('\nsuccess = agent exited cleanly; kept = you applied its work'));
+  console.log(dim('\nsuccess = agent finished its task; kept = you applied its work'));
   return 0;
 }
 

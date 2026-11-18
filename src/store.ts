@@ -56,6 +56,8 @@ export function openStore(root: string) {
   const cols = new Set((db.prepare('PRAGMA table_info(runs)').all() as { name: string }[]).map((c) => c.name));
   if (!cols.has('model')) db.exec('ALTER TABLE runs ADD COLUMN model TEXT');
   if (!cols.has('race_id')) db.exec('ALTER TABLE runs ADD COLUMN race_id TEXT');
+  // How the run ended (done/failed/cancelled). Unlike status, apply/discard never overwrite it.
+  if (!cols.has('outcome')) db.exec('ALTER TABLE runs ADD COLUMN outcome TEXT');
 
   const insRun = db.prepare(
     `INSERT INTO runs (id, agent, model, race_id, task, base, branch, worktree, status, started_at)
@@ -63,7 +65,7 @@ export function openStore(root: string) {
   );
   const insEvent = db.prepare('INSERT INTO events (run_id, seq, ts, kind, data) VALUES (?, ?, ?, ?, ?)');
   const finish = db.prepare(
-    `UPDATE runs SET status = ?, ended_at = ?, exit_code = ?, summary = ?, cost_usd = ?, turns = ?, files_changed = ?
+    `UPDATE runs SET status = ?, outcome = ?, ended_at = ?, exit_code = ?, summary = ?, cost_usd = ?, turns = ?, files_changed = ?
      WHERE id = ?`,
   );
   const setStatusStmt = db.prepare('UPDATE runs SET status = ? WHERE id = ?');
@@ -81,7 +83,7 @@ export function openStore(root: string) {
     },
 
     finishRun(id: string, f: { status: RunStatus; exitCode: number; summary?: string; costUsd?: number; turns?: number; filesChanged: number }) {
-      finish.run(f.status, Date.now(), f.exitCode, f.summary ?? null, f.costUsd ?? null, f.turns ?? null, f.filesChanged, id);
+      finish.run(f.status, f.status, Date.now(), f.exitCode, f.summary ?? null, f.costUsd ?? null, f.turns ?? null, f.filesChanged, id);
     },
 
     setStatus(id: string, status: RunStatus) {
@@ -105,7 +107,7 @@ export function openStore(root: string) {
       return db.prepare(`
         SELECT agent || COALESCE(':' || model, '') AS who,
                COUNT(*) AS runs,
-               SUM(exit_code = 0) AS ok,
+               SUM(COALESCE(outcome = 'done', exit_code = 0)) AS ok, -- older rows lack outcome
                SUM(status = 'applied') AS applied,
                AVG(turns) AS avg_turns,
                AVG(ended_at - started_at) AS avg_ms

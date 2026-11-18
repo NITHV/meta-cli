@@ -26,8 +26,14 @@ type stripping, and state lives in `.meta/meta.db` (built-in `node:sqlite`).
 - **Isolation**: a run is a worktree at `.meta/worktrees/<id>` on branch
   `meta/<id>`, based on your HEAD. `apply` squash-merges it and leaves the
   changes staged for you to commit.
-- **Safety**: Claude runs with `--permission-mode acceptEdits` by default
-  (edits allowed, shell commands denied). `--yolo` bypasses permissions.
+- **Safety**: by default agents may edit files but shell commands are denied
+  (Claude `--permission-mode acceptEdits`, agy `--mode=accept-edits`). `--yolo`
+  bypasses permissions; the worktree isolates files, not your machine.
+- **agy caveat**: in headless safe mode, agy ends the run at the first denied
+  shell command (Claude keeps going). meta tells agy to stick to file tools and
+  marks such runs `failed`; use `--yolo` if you want agy to run commands.
+  Free-tier Gemini models sometimes return 503 "no capacity": pick another with
+  `-a agy:<model>` (list them with `agy models`).
 - **State**: every run and event is in SQLite, so `meta show <run>` can replay it.
 - **Race**: contestants run through a worker pool capped by `--max` (default 2),
   so a laptop with little RAM isn't swamped. Runs in a race share a `race_id`.
