@@ -1,2 +1,5 @@
 ﻿node_modules/
 .meta/
+
+# design research screenshots of other products (local only)
+.impeccable/reference/

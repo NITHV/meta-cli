@@ -2,13 +2,15 @@
   "name": "meta-ide",
   "version": "0.1.0",
   "private": true,
-  "description": "meta IDE: a terminal-first desktop app around Claude Code sessions",
+  "description": "Tando: a terminal-first desktop app for running several coding-agent sessions side by side",
   "main": "main.js",
   "scripts": {
     "start": "electron ."
   },
   "license": "MIT",
   "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@lydell/node-pty": "1.2.0-beta.18",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
