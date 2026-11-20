@@ -149,7 +149,20 @@ function init(ctx) {
   ipcMain.handle('theme:titlebar', (_e, color, symbolColor) => {
     const win = ctx.getWin();
     const ok = (c) => /^#[0-9a-f]{6}$/i.test(c);
-    if (win && ok(color) && ok(symbolColor)) win.setTitleBarOverlay({ color, symbolColor, height: 44 });
+    if (win && ok(color) && ok(symbolColor)) {
+      win.setTitleBarOverlay({ color, symbolColor, height: 45 });
+      // Mica follows the native theme, so keep it in step with the app's own theme.
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
+      const want = r * 0.3 + g * 0.59 + b * 0.11 > 140 ? 'light' : 'dark';
+      const nt = require('electron').nativeTheme;
+      if (nt.themeSource !== want) {
+        nt.themeSource = want;
+        // Mica only in dark mode: in light mode it hides the page (see createWindow).
+        if (want === 'light') { win.setBackgroundMaterial('none'); win.setBackgroundColor('#F7F6F8'); }
+        else { win.setBackgroundColor('#00000000'); win.setBackgroundMaterial('mica'); }
+        win.webContents.invalidate();
+      }
+    }
     return true;
   });
 }

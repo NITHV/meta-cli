@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-19T00:00:00+05:30",
+  "title": "Design System: Tando",
+  "extensions": {
+    "colorMeta": {
+      "accent": { "role": "primary", "displayName": "Focus Blue", "canonical": "#4E8EF7", "tonalRamp": ["#0E1E3C", "#163165", "#1F4790", "#2F6FE4", "#4E8EF7", "#7EADFA", "#B2CEFC", "#E3ECFD"] },
+      "needs-you": { "role": "status", "displayName": "Needs-You Coral", "canonical": "#FF6363", "tonalRamp": ["#3A1D1F", "#6A2326", "#A32F33", "#E5484D", "#FF6363", "#FF8E8E", "#FFBFBF", "#FDE8E8"] },
+      "working": { "role": "status", "displayName": "Working Blue", "canonical": "#4E8EF7" },
+      "done": { "role": "status", "displayName": "Done Green", "canonical": "#3FBF6F", "tonalRamp": ["#0D2A18", "#14482A", "#1B6B3D", "#1E9E50", "#3FBF6F", "#72D394", "#AEE6C1", "#E3F7EA"] },
+      "idle": { "role": "status", "displayName": "Idle Grey", "canonical": "#5C5A61" },
+      "error": { "role": "status", "displayName": "Error Red", "canonical": "#FF6B60" },
+      "ground": { "role": "neutral", "displayName": "Ground", "canonical": "#151417", "tonalRamp": ["#111013", "#151417", "#1B1A1E", "#242328", "#3A3940", "#8D8B92", "#E6E4E8", "#FFFFFF"] },
+      "surface": { "role": "neutral", "displayName": "Surface", "canonical": "#1B1A1E" },
+      "raised": { "role": "neutral", "displayName": "Raised", "canonical": "#242328" },
+      "sidebar-mica": { "role": "neutral", "displayName": "Mica Sidebar", "canonical": "rgba(30, 29, 33, .74)" },
+      "terminal": { "role": "neutral", "displayName": "Terminal Black", "canonical": "#111013" },
+      "hairline": { "role": "neutral", "displayName": "Hairline", "canonical": "#2A292E" },
+      "hairline-strong": { "role": "neutral", "displayName": "Hairline Strong", "canonical": "#3A3940" },
+      "text": { "role": "neutral", "displayName": "Text", "canonical": "#F2F1F3" },
+      "faint": { "role": "neutral", "displayName": "Faint", "canonical": "#8D8B92" }
+    },
+    "themes": {
+      "dark": { "note": "Default. Window uses Windows 11 Mica (backgroundMaterial: mica, transparent background); sidebar is translucent over it.", "tokens": { "base": "#151417", "surface": "#1B1A1E", "raised": "#242328", "side": "rgba(30, 29, 33, .74)", "term": "#111013", "line": "#2A292E", "line-strong": "#3A3940", "hover": "rgba(255, 255, 255, .05)", "sel": "rgba(255, 255, 255, .08)", "text": "#F2F1F3", "text-2": "#B2B0B7", "muted": "#A3A1A8", "faint": "#8D8B92", "accent": "#4E8EF7", "accent-ink": "#FFFFFF", "accent-bg": "#1E2A40", "working": "#4E8EF7", "needs": "#FF6363", "needs-bg": "#3A1D1F", "done": "#3FBF6F", "idle": "#5C5A61", "error": "#FF6B60" } },
+      "light": { "note": "Solid window background (#F7F6F8), no Mica.", "tokens": { "base": "#FFFFFF", "surface": "#F7F6F8", "raised": "#FFFFFF", "side": "rgba(239, 237, 241, .94)", "term": "#FFFFFF", "line": "#E6E4E8", "line-strong": "#D3D1D6", "hover": "rgba(0, 0, 0, .04)", "sel": "rgba(0, 0, 0, .065)", "text": "#1D1C20", "text-2": "#45434A", "muted": "#55535A", "faint": "#6A6870", "accent": "#2F6FE4", "accent-ink": "#FFFFFF", "accent-bg": "#E3ECFD", "working": "#2F6FE4", "needs": "#E5484D", "needs-bg": "#FDE8E8", "done": "#1E9E50", "idle": "#8E8C93", "error": "#CD2B31" } },
+      "contrast": { "note": "High contrast: black grounds, white hairlines, brightened status hues.", "tokens": { "base": "#000000", "surface": "#000000", "raised": "#1A1A1A", "side": "#000000", "term": "#000000", "line": "#FFFFFF", "line-strong": "#FFFFFF", "hover": "rgba(255, 255, 255, .12)", "sel": "rgba(255, 255, 255, .2)", "text": "#FFFFFF", "text-2": "#FFFFFF", "muted": "#E0E0E0", "faint": "#D0D0D0", "accent": "#7CC4FF", "accent-ink": "#000000", "accent-bg": "#001A33", "working": "#7CC4FF", "needs": "#FF6B6B", "needs-bg": "#3A0000", "done": "#5CFF9D", "idle": "#D0D0D0", "error": "#FF6B6B" } }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Start screen title only." },
+      "headline": { "displayName": "Headline", "purpose": "Empty-state and dialog titles, reader subheads." },
+      "title": { "displayName": "Title", "purpose": "Session name, project name, reader title." },
+      "body": { "displayName": "Body", "purpose": "All frame text." },
+      "reading": { "displayName": "Reading", "purpose": "Markdown reader body, max 72ch." },
+      "label": { "displayName": "Label", "purpose": "Sentence-case group and section headers in Faint." },
+      "keycap": { "displayName": "Keycap", "purpose": "Shortcut hints." },
+      "mono": { "displayName": "Mono", "purpose": "Terminal, code, commit messages, branch names." }
+    },
+    "shadows": [
+      { "name": "pop", "value": "0 1px 0 rgba(255, 255, 255, .05) inset, 0 18px 48px -12px rgba(0, 0, 0, .65)", "purpose": "Palette, menus and overlay panels (dark)." },
+      { "name": "pop-light", "value": "0 1px 2px rgba(0, 0, 0, .06), 0 18px 44px -14px rgba(40, 20, 30, .28)", "purpose": "Palette, menus and overlay panels (light)." },
+      { "name": "segment-lift", "value": "0 1px 1px rgba(0, 0, 0, .25)", "purpose": "Selected segment in the segmented control." },
+      { "name": "inset-highlight", "value": "0 1px 0 rgba(255, 255, 255, .18) inset", "purpose": "Faint top edge on status tiles (12% on the primary button)." }
+    ],
+    "materials": [
+      { "name": "mica", "value": "Electron backgroundMaterial: mica with transparent window", "purpose": "Dark theme only, behind the translucent sidebar." },
+      { "name": "palette-glass", "value": "color-mix(in oklab, var(--raised) 86%, transparent); backdrop-filter: blur(24px) saturate(1.4)", "purpose": "Command palette only." },
+      { "name": "menu-glass", "value": "color-mix(in oklab, var(--raised) 90%, transparent); backdrop-filter: blur(20px) saturate(1.3)", "purpose": "Context menus." }
+    ],
+    "motion": [
+      { "name": "ease", "value": "cubic-bezier(.2, .8, .2, 1)", "purpose": "All state transitions." },
+      { "name": "duration-fast", "value": "120ms", "purpose": "Row hover and footer action hover." },
+      { "name": "duration-base", "value": "150ms", "purpose": "Buttons, toolbar, segmented control, chevrons." },
+      { "name": "duration-meter", "value": "300ms", "purpose": "5-hour meter width." },
+      { "name": "reduced-motion", "value": "all transitions and animations off", "purpose": "prefers-reduced-motion: reduce." }
+    ],
+    "breakpoints": [
+      { "name": "inspector-fold", "value": "1280px" },
+      { "name": "toolbar-compact", "value": "1100px" },
+      { "name": "sidebar-rail", "value": "900px" },
+      { "name": "window-min", "value": "600px x 480px" }
+    ],
+    "open": [
+
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one blue action in a context, optionally with a keycap.",
+      "html": "<button class=\"ds-btn-primary\">Commit <kbd class=\"ds-kbd ds-kbd-on-accent\">Ctrl ↵</kbd></button>",
+      "css": ".ds-btn-primary { background: var(--accent, #4E8EF7); color: var(--accent-ink, #fff); font: 600 13px 'Inter Variable', 'Segoe UI', sans-serif; border: 0; border-radius: 7px; height: 30px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 1px 0 rgba(255,255,255,.12) inset; cursor: pointer; transition: filter .15s cubic-bezier(.2,.8,.2,1); } .ds-btn-primary:hover { filter: brightness(1.08); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent, #4E8EF7); outline-offset: 1px; } .ds-kbd { font: 500 11px 'Inter Variable', sans-serif; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; } .ds-kbd-on-accent { background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.22); color: inherit; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary action on Raised with a strong hairline.",
+      "html": "<button class=\"ds-btn-ghost\">Undo</button>",
+      "css": ".ds-btn-ghost { background: var(--raised, #242328); color: var(--text, #F2F1F3); border: 1px solid var(--line-strong, #3A3940); border-radius: 7px; padding: 4px 10px; font: 13px 'Inter Variable', 'Segoe UI', sans-serif; cursor: pointer; transition: background .15s cubic-bezier(.2,.8,.2,1); } .ds-btn-ghost:hover { background: var(--sel, rgba(255,255,255,.08)); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--accent, #4E8EF7); outline-offset: 1px; }"
+    },
+    {
+      "name": "Search Pill",
+      "kind": "input",
+      "refersTo": "search-pill",
+      "description": "Centred toolbar search that opens the palette, with its keycap.",
+      "html": "<button class=\"ds-search\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\"><circle cx=\"7\" cy=\"7\" r=\"4.5\"/><path d=\"M10.5 10.5 14 14\"/></svg><span>Search sessions, files, commands</span><kbd class=\"ds-search-k\">Ctrl K</kbd></button>",
+      "css": ".ds-search { width: 380px; max-width: 100%; height: 30px; border-radius: 8px; background: var(--raised, #242328); border: 1px solid var(--line, #2A292E); display: flex; align-items: center; gap: 8px; padding: 0 6px 0 10px; color: var(--faint, #8D8B92); font: 13px 'Inter Variable', 'Segoe UI', sans-serif; cursor: pointer; transition: border-color .15s cubic-bezier(.2,.8,.2,1); } .ds-search:hover { border-color: var(--line-strong, #3A3940); color: var(--text-2, #B2B0B7); } .ds-search:focus-visible { outline: 2px solid var(--accent, #4E8EF7); outline-offset: 1px; } .ds-search-k { margin-left: auto; font: 500 11px 'Inter Variable', sans-serif; height: 20px; padding: 0 5px; border-radius: 5px; background: var(--raised, #242328); border: 1px solid var(--line-strong, #3A3940); color: var(--text-2, #B2B0B7); display: inline-flex; align-items: center; }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "nav",
+      "refersTo": "toolbar-button-on",
+      "description": "Sessions / Files / Git view switch with a needs-you badge.",
+      "html": "<div class=\"ds-seg\"><button class=\"ds-seg-b on\">Sessions <span class=\"ds-badge\">2</span></button><button class=\"ds-seg-b\">Files</button><button class=\"ds-seg-b\">Git</button></div>",
+      "css": ".ds-seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: 8px; background: var(--raised, #242328); border: 1px solid var(--line, #2A292E); } .ds-seg-b { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: none; display: flex; align-items: center; gap: 6px; color: var(--text-2, #B2B0B7); font: 500 12.5px 'Inter Variable', 'Segoe UI', sans-serif; cursor: pointer; transition: background .15s cubic-bezier(.2,.8,.2,1); } .ds-seg-b:hover { color: var(--text, #F2F1F3); } .ds-seg-b.on { background: var(--sel, rgba(255,255,255,.08)); color: var(--text, #F2F1F3); box-shadow: 0 1px 1px rgba(0,0,0,.25); } .ds-seg-b:focus-visible { outline: 2px solid var(--accent, #4E8EF7); outline-offset: 1px; } .ds-badge { min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px; background: var(--needs, #FF6363); color: #fff; font-size: 10.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }"
+    },
+    {
+      "name": "Session Row",
+      "kind": "custom",
+      "refersTo": "session-row",
+      "description": "Source-list row with status tile; coral meta when the session needs you.",
+      "html": "<button class=\"ds-srow needs\"><span class=\"ds-tile needs\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 12 12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\"><path d=\"M6 3v3.5M6 9h.01\"/></svg></span><span class=\"ds-lab\"><span class=\"ds-nm\">fix-auth</span><span class=\"ds-pj\">meta-cli</span></span><span class=\"ds-r\">Allow?</span></button>",
+      "css": ".ds-srow { display: flex; align-items: center; gap: 10px; width: 240px; height: 38px; padding: 0 8px; border: 0; border-radius: 7px; background: none; text-align: left; color: var(--text, #F2F1F3); font: 13px 'Inter Variable', 'Segoe UI', sans-serif; cursor: pointer; transition: background .12s cubic-bezier(.2,.8,.2,1); } .ds-srow:hover { background: var(--hover, rgba(255,255,255,.05)); } .ds-srow:focus-visible { outline: 2px solid var(--accent, #4E8EF7); outline-offset: 1px; } .ds-lab { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.25; } .ds-nm { font-weight: 500; } .ds-pj, .ds-r { font-size: 11.5px; color: var(--faint, #8D8B92); } .ds-srow.needs .ds-r { color: var(--needs, #FF6363); font-weight: 500; } .ds-tile { width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; color: #fff; background: var(--idle, #5C5A61); box-shadow: 0 1px 0 rgba(255,255,255,.18) inset; } .ds-tile.needs { background: var(--needs, #FF6363); }"
+    },
+    {
+      "name": "Information Row",
+      "kind": "card",
+      "refersTo": "info-row",
+      "description": "Inspector label/value row with hairline separator.",
+      "html": "<div class=\"ds-irow\"><span class=\"ds-k\">Status</span><span class=\"ds-v\"><i class=\"ds-pip\"></i>Working</span></div><div class=\"ds-irow\"><span class=\"ds-k\">Branch</span><span class=\"ds-v\">main</span></div>",
+      "css": ".ds-irow { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 256px; min-height: 32px; border-bottom: 1px solid var(--line, #2A292E); font: 12.5px 'Inter Variable', 'Segoe UI', sans-serif; } .ds-k { color: var(--text-2, #B2B0B7); } .ds-v { font-weight: 500; color: var(--text, #F2F1F3); display: flex; align-items: center; gap: 6px; } .ds-pip { width: 8px; height: 8px; border-radius: 50%; background: var(--working, #4E8EF7); }"
+    },
+    {
+      "name": "Action Footer",
+      "kind": "custom",
+      "refersTo": "action-footer",
+      "description": "Names what is waiting and the keys that answer it.",
+      "html": "<div class=\"ds-foot\"><span class=\"ds-who\">fix-auth <span class=\"ds-msg\">wants to run npm test</span></span><span class=\"ds-acts\"><button class=\"ds-act pri\">Allow <kbd class=\"ds-k2\">↵</kbd></button><button class=\"ds-act\">Always <kbd class=\"ds-k2\">A</kbd></button><button class=\"ds-act\">Deny <kbd class=\"ds-k2\">N</kbd></button></span></div>",
+      "css": ".ds-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 40px; padding: 0 8px 0 14px; background: var(--surface, #1B1A1E); border-top: 1px solid var(--line, #2A292E); font: 12.5px 'Inter Variable', 'Segoe UI', sans-serif; color: var(--text-2, #B2B0B7); } .ds-who { color: var(--text, #F2F1F3); } .ds-msg { color: var(--text-2, #B2B0B7); } .ds-acts { display: flex; gap: 2px; } .ds-act { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 6px 0 10px; border: 0; border-radius: 7px; background: none; font: 500 12.5px 'Inter Variable', sans-serif; color: var(--text, #F2F1F3); cursor: pointer; transition: background .12s cubic-bezier(.2,.8,.2,1); } .ds-act:hover { background: var(--hover, rgba(255,255,255,.05)); } .ds-act.pri { background: var(--sel, rgba(255,255,255,.08)); } .ds-act.pri:hover { background: var(--line-strong, #3A3940); } .ds-act:focus-visible { outline: 2px solid var(--accent, #4E8EF7); outline-offset: 1px; } .ds-k2 { font: 500 11px 'Inter Variable', sans-serif; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px; background: var(--raised, #242328); border: 1px solid var(--line-strong, #3A3940); color: var(--text-2, #B2B0B7); display: inline-flex; align-items: center; justify-content: center; }"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Session header metadata: model, branch, shell kind.",
+      "html": "<span class=\"ds-chip\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 12 12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\"><circle cx=\"3\" cy=\"3\" r=\"1.5\"/><circle cx=\"3\" cy=\"9\" r=\"1.5\"/><circle cx=\"9\" cy=\"4\" r=\"1.5\"/><path d=\"M3 4.5v3M9 5.5c0 2-6 1-6 2\"/></svg>main</span>",
+      "css": ".ds-chip { height: 22px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--line-strong, #3A3940); display: inline-flex; align-items: center; gap: 6px; font: 12px 'Inter Variable', 'Segoe UI', sans-serif; color: var(--text-2, #B2B0B7); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Ground field with hairline; blue outline on focus.",
+      "html": "<input class=\"ds-input\" placeholder=\"Commit message\">",
+      "css": ".ds-input { width: 280px; background: var(--base, #151417); color: var(--text, #F2F1F3); border: 1px solid var(--line, #2A292E); border-radius: 8px; padding: 8px 10px; font: 13px/1.45 'Inter Variable', 'Segoe UI', sans-serif; } .ds-input::placeholder { color: var(--faint, #8D8B92); } .ds-input:focus { outline: 2px solid var(--accent, #4E8EF7); outline-offset: -1px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Frame",
+    "overview": "The terminal is the work. Everything around it is a quiet, precise frame whose only loud job is to say which session needs you and let you answer from the keyboard. The register is the category standard for serious product UI, sitting alongside Linear and Raycast with macOS layout conventions on a Windows 11 window: one unified toolbar, a grouped source list on the left, a label/value inspector on the right, and a context-aware action footer at the bottom.\n\nDensity is compact desktop: 13 px body, 30 px controls, 38 px list rows, hairline separators instead of boxes. Grounds are neutral warm grey, close in value so regions separate by hairline rather than by contrast. Color is reserved for status. Glass appears once, on the floating command palette (and its sibling context menus); every other surface paints a solid ground. In the dark theme the sidebar sits over real Windows 11 Mica.\n\nThe product name and mark are open. The toolbar currently shows a placeholder: a 18 px rounded square with a coral gradient next to the project name. Treat both as provisional; do not build further identity on them.\n\nRejected outright: the floating-glass launcher look, themed or metaphor-driven worlds, a VS Code clone, a Claude/Anthropic-borrowed look, anything flashy or gamey, and local or cultural theming.",
+    "keyCharacteristics": [
+      "Terminal-first: the centre column always holds the terminal; the frame folds before the terminal shrinks below 80 columns.",
+      "Status as small rounded icon tiles: red-coral needs you, blue working, green done, grey idle.",
+      "Hairline structure (1 px) and tonal grounds; shadows only on things that float.",
+      "Raycast-style keycaps beside every keyboard-reachable action.",
+      "Three first-class themes: dark (with Mica), light (solid) and high contrast."
+    ],
+    "rules": [
+      { "name": "The Needs-You Rule", "body": "Red-coral means \"this session needs you\" and nothing else. Never use it for decoration, brand emphasis, errors, or a primary button. If a screen shows coral, the user has something to answer.", "section": "colors" },
+      { "name": "The One Blue Rule", "body": "Blue is selection, focus and the primary action. There is no second accent.", "section": "colors" },
+      { "name": "The Same Meaning Rule", "body": "Status colors keep their meaning in every theme; only their values shift for contrast.", "section": "colors" },
+      { "name": "The Sentence-Case Label Rule", "body": "Section and group labels are sentence case at 11.5px semibold in Faint. They name the group; they do not shout.", "section": "typography" },
+      { "name": "The Tabular Numbers Rule", "body": "Token counts, meter values and timings use `font-variant-numeric: tabular-nums`.", "section": "typography" },
+      { "name": "The Float-Only Rule", "body": "A shadow means the element floats above the terminal. Docked panels never take one.", "section": "elevation" },
+      { "name": "The One Glass Rule", "body": "Backdrop blur exists only on the command palette (24px blur) and its sibling context menus (20px). Never on docked chrome.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep the terminal the largest region at every width; fold the inspector at 1280px and the sidebar at 900px before the terminal drops under 80 columns.",
+      "Do show status as a filled rounded tile in the status color, with a glyph, never color alone.",
+      "Do put a keycap beside every action that has a shortcut.",
+      "Do separate regions with a 1px hairline and a tonal step, not with shadows or boxes.",
+      "Do define every color as a token and redefine it per theme; dark, light and high contrast are all first class.",
+      "Do keep motion to 120 to 200ms with `cubic-bezier(.2,.8,.2,1)` on hover, selection and panel collapse only, and drop it under reduced motion."
+    ],
+    "donts": [
+      "Don't use red-coral for anything but a session that needs you.",
+      "Don't add a second accent color; blue does all interactive work.",
+      "Don't use backdrop blur or glass on docked chrome; it belongs to the palette and menus only.",
+      "Don't put a shadow on anything that does not float.",
+      "Don't turn the frame into a VS Code clone, a Claude/Anthropic-borrowed look, a themed or metaphor-driven world, or anything flashy or gamey.",
+      "Don't recolour the mark with coral or add a gradient: coral belongs to needs-you only."
+    ]
+  }
+}

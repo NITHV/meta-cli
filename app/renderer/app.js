@@ -1,4 +1,4 @@
-// meta IDE window. Everything privileged goes through window.meta (preload.js).
+// Tando window. Everything privileged goes through window.meta (preload.js).
 import { init as initFeatures } from './features.js';
 import { init as initContent } from './content.js';
 import { init as initDevtools } from './devtools.js';
@@ -47,9 +47,9 @@ const STATUS_LABEL = { working: 'working', needs: 'needs you', done: 'done', idl
 // =============================================================== terminals
 
 const THEME = {
-  background: '#0E0F12', foreground: '#D4D8E1', cursor: '#F28C4B', cursorAccent: '#0E0F12',
-  selectionBackground: '#3A2A1E', black: '#1E2128', red: '#F06A6A', green: '#4ECB8F', yellow: '#E8B44A',
-  blue: '#6AA8FF', magenta: '#C792EA', cyan: '#5FD4D4', white: '#D4D8E1', brightBlack: '#6E7686',
+  background: '#111013', foreground: '#DCDBDF', cursor: '#F2F1F3', cursorAccent: '#111013',
+  selectionBackground: '#2F3A52', black: '#242328', red: '#FF6363', green: '#6AD38F', yellow: '#F2B544',
+  blue: '#6AA8FF', magenta: '#C792EA', cyan: '#5FD4D4', white: '#DCDBDF', brightBlack: '#8D8B92',
   brightRed: '#FF8A8A', brightGreen: '#7EE0AE', brightYellow: '#F5CC72', brightBlue: '#94C0FF',
   brightMagenta: '#DDB0F5', brightCyan: '#8BE6E6', brightWhite: '#FFFFFF',
 };
@@ -57,15 +57,15 @@ const THEME = {
 function isAppShortcut(e) {
   if (!e.ctrlKey || e.altKey) return false;
   const k = e.key.toLowerCase();
-  if (e.shiftKey) return ['t', 'w', 'f', 'g', 'p', 'h', ' '].includes(k);
-  return k === 't' || k === 'p' || k === 'b' || k === 'k' || k === '\\' || k === 'tab' || /^[1-9]$/.test(k);
+  if (e.shiftKey) return ['t', 'w', 'f', 'g', 'p', 'h', 'i', ' '].includes(k);
+  return k === 't' || k === 'p' || k === 'b' || k === 'k' || k === 'j' || k === '\\' || k === 'tab' || /^[1-9]$/.test(k);
 }
 
 function makeTerm(info) {
   const node = el('div', { className: 'term', hidden: true });
   $('#terminals').append(node);
   const term = new window.Terminal({
-    fontFamily: '"Cascadia Code", "Cascadia Mono", Consolas, monospace',
+    fontFamily: '"JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace',
     fontSize: 13,
     lineHeight: 1.15,
     theme: C ? C.termTheme() : THEME,
@@ -188,62 +188,155 @@ function startRename(s, tabEl) {
   input.onblur = () => done(true);
 }
 
+// Status icon tiles (static SVG strings, never user text).
+const ICON = {
+  needs: '<path d="M12 7v6M12 17v.5"/>',
+  working: '<path d="M8 9l3 3-3 3M13 15h4"/>',
+  done: '<path d="M6 12l4 4 8-8"/>',
+  idle: '<circle cx="12" cy="12" r="4.5"/>',
+  paused: '<path d="M10 8v8M14 8v8"/>',
+  shell: '<path d="M6 9l3 3-3 3M12 15h6"/>',
+  branch: '<circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10M18 7c0 6-12 4-12 10"/>',
+  close: '<path d="M7 7l10 10M17 7L7 17"/>',
+};
+const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
+const statusOf = (s) => s.info.status || 'paused';
+const isPermission = (s) => statusOf(s) === 'needs' && /permission|approve|allow/i.test(s.info.statusMsg || '');
+function tile(s, small = false) {
+  const st = statusOf(s);
+  const k = st === 'needs' || st === 'done' || st === 'paused' ? st : s.info.kind === 'shell' ? 'shell' : st === 'working' ? 'working' : 'idle';
+  return el('span', { className: `tile ${st}${small ? ' sm' : ''}`, innerHTML: svg(k) });
+}
+function rowMeta(s) {
+  const st = statusOf(s);
+  if (st === 'needs') return isPermission(s) ? 'permission' : 'waiting';
+  if (st === 'working') return s.info.model || 'working';
+  if (st === 'paused') return s.info.asleep ? 'asleep' : 'paused';
+  return st === 'done' ? 'done' : s.info.kind === 'shell' ? 'shell' : 'idle';
+}
+
+function renderHead() {
+  const s = S.sessions.get(S.active);
+  const head = $('#sessHead');
+  head.hidden = !s;
+  if (!s) return;
+  const st = statusOf(s);
+  const nm = el('span', { className: 'nm', textContent: s.info.name, title: 'Double-click to rename' });
+  nm.ondblclick = () => startRename(s, nm);
+  const close = el('button', { className: 'icon icon-btn', title: 'Close session (Ctrl+Shift+W)', 'aria-label': 'Close session', innerHTML: svg('close') });
+  close.onclick = () => closeSession(s.info.id);
+  head.replaceChildren(...[
+    tile(s, true), nm,
+    el('span', { className: 'pj', textContent: base(s.info.project) }),
+    s.info.kind === 'claude' ? el('span', { className: 'chip', textContent: s.info.model || 'default model' }) : el('span', { className: 'chip', textContent: 'PowerShell' }),
+    s.info.isolated ? el('span', { className: 'chip br', title: 'Runs on its own branch and worktree', innerHTML: svg('branch') }, s.info.isolated.branch) : null,
+    el('span', { className: 'st ' + st, textContent: st === 'needs' ? (isPermission(s) ? 'Needs your permission' : 'Waiting for you') : STATUS_LABEL[st] }),
+    close].filter(Boolean));
+  head.oncontextmenu = (e) => { e.preventDefault(); tabMenu(s, e.clientX, e.clientY, nm); };
+}
+
+function renderInspector() {
+  const s = S.sessions.get(S.active);
+  const box = $('#inspInfo');
+  if (!s) { box.replaceChildren(el('div', { className: 'empty-list', textContent: 'Pick a session to see its details.' })); return; }
+  const st = statusOf(s);
+  const tok = S.tokens?.bySession?.[s.info.claudeId];
+  const pipColor = { needs: 'var(--needs)', working: 'var(--working)', done: 'var(--done)' }[st] || 'var(--idle)';
+  const branch = s.info.isolated?.branch || (gitState?.repo ? gitState.branch : '');
+  const rows = [
+    ['Status', el('span', { className: 'v' }, el('span', { className: 'pip', style: `background:${pipColor}` }), st === 'needs' ? 'Needs you' : STATUS_LABEL[st].replace(/^./, (c) => c.toUpperCase()))],
+    ['Project', base(s.info.project)],
+    ['Kind', s.info.kind === 'claude' ? 'Claude Code' : 'PowerShell'],
+    s.info.kind === 'claude' ? ['Model', s.info.model ? s.info.model.replace(/^./, (c) => c.toUpperCase()) : 'Default'] : null,
+    branch ? ['Branch', branch + (s.info.isolated ? ' (own worktree)' : '')] : null,
+    tok ? ['Tokens', fmt(tok.total)] : null,
+  ].filter(Boolean);
+  box.replaceChildren(...rows.map(([k, v]) => el('div', { className: 'irow' }, el('span', { className: 'k', textContent: k }), typeof v === 'string' ? el('span', { className: 'v', textContent: v, title: v }) : v)));
+}
+
+function renderFooter() {
+  const all = [...S.sessions.values()];
+  const needing = all.filter((s) => statusOf(s) === 'needs');
+  const s = S.sessions.get(S.active);
+  const activeNeeds = s && statusOf(s) === 'needs';
+  const perm = s && isPermission(s);
+  for (const id of ['#actAllow', '#actAlways', '#actDeny']) $(id).hidden = !perm;
+  $('#actNext').hidden = !needing.some((x) => x.info.id !== S.active);
+  $('#actSep').hidden = !perm;
+  const who = $('#sbNeeds');
+  if (activeNeeds) {
+    const msg = (s.info.statusMsg || '').replace(/^Claude\s+/i, '');
+    who.replaceChildren(tile(s, true), el('span', { textContent: `${s.info.name} ${perm ? 'needs your permission' : 'is waiting for you'}` }), msg && !perm ? el('span', { className: 'msg', textContent: `· ${msg}` }) : null);
+  } else if (needing.length) {
+    who.replaceChildren(tile(needing[0], true), el('span', { textContent: needing.length === 1 ? `${needing[0].info.name} needs you` : `${needing.length} sessions need you` }));
+  } else who.replaceChildren();
+}
+
+function nextNeeding() {
+  const list = [...S.sessions.values()].filter((s) => statusOf(s) === 'needs');
+  if (!list.length) return toast('Nothing is waiting for you');
+  const i = list.findIndex((s) => s.info.id === S.active);
+  const n = list[(i + 1) % list.length];
+  if (n.info.project !== S.project) enterProject(n.info.project).then(() => activate(n.info.id));
+  else activate(n.info.id);
+}
+
+function answer(keys) {
+  const s = S.sessions.get(S.active);
+  if (!s || !isPermission(s)) return;
+  api.write(s.info.id, keys);
+  s.term.focus();
+}
+
 function renderSessions() {
   const list = projectSessions();
-  $('#tabs').replaceChildren(...list.map((s, i) => {
-    const st = s.info.status || 'paused';
-    const close = el('span', { className: 'close', title: 'Close session', textContent: '✕' });
-    close.onclick = (e) => { e.stopPropagation(); closeSession(s.info.id); };
-    const tok = S.tokens?.bySession?.[s.info.claudeId];
-    const tab = el('button', {
-      className: 'tab' + (s.info.id === S.active ? ' active' : ''),
-      title: `${s.info.name} · ${STATUS_LABEL[st]}${tok ? ` · ${fmt(tok.total)} tokens` : ''}${i < 9 ? ` · Ctrl+${i + 1}` : ''}\nDouble-click to rename`,
-    },
-    el('span', { className: 'dot ' + st }),
-    el('span', { textContent: s.info.kind === 'shell' ? `⌘ ${s.info.name}` : s.info.name }),
-    s.info.isolated ? el('span', { className: 'branch-badge', textContent: '⎇', title: s.info.isolated.branch }) : null,
-    st === 'needs' || st === 'working' || st === 'done' ? el('span', { className: 'state ' + st, textContent: STATUS_LABEL[st] })
-      : s.info.asleep ? el('span', { className: 'state', textContent: 'asleep' }) : null,
-    close);
-    tab.onclick = () => activate(s.info.id);
-    tab.ondblclick = () => startRename(s, tab);
-    tab.oncontextmenu = (e) => { e.preventDefault(); tabMenu(s, e.clientX, e.clientY, tab); };
-    return tab;
-  }));
-  $('#tabs').querySelector('.active')?.scrollIntoView({ inline: 'nearest' });
 
-  // Sessions from every project, grouped; this project first. Clicking another project's
+  // Every project's sessions in one source list, grouped by what each needs from you.
+  // This project's sessions sort first inside each group. Clicking another project's
   // session switches to that project.
-  const groups = new Map();
-  for (const s of [...S.sessions.values()].sort((a, b) => (a.info.project === S.project ? -1 : b.info.project === S.project ? 1 : 0))) {
-    if (!groups.has(s.info.project)) groups.set(s.info.project, []);
-    groups.get(s.info.project).push(s);
-  }
-  const multi = groups.size > 1;
-  $('#sessionList').replaceChildren(...[...groups].flatMap(([proj, items]) => [
-    multi ? el('div', { className: 'sgroup', textContent: base(proj) + (proj === S.project ? ' (open)' : '') }) : null,
-    ...items.map((s) => {
-      const st = s.info.status || 'paused';
-      const r = el('button', { className: 'srow' + (s.info.id === S.active ? ' on' : '') },
-        el('span', { className: 'dot ' + st }),
-        el('span', { className: 'n', textContent: s.info.name }),
-        el('span', { className: 't', textContent: st === 'needs' ? 'waiting' : STATUS_LABEL[st] }));
-      r.onclick = () => (s.info.project === S.project ? activate(s.info.id) : enterProject(s.info.project).then(() => activate(s.info.id)));
-      return r;
-    }),
-  ].filter(Boolean)));
-  if (!list.length) $('#sessionList').append(el('div', { className: 'row muted', textContent: 'None yet' }));
+  const GROUPS = [['needs', 'Needs you'], ['working', 'Working'], ['done', 'Done'], ['rest', 'Idle']];
+  const groupOf = (s) => { const st = statusOf(s); return st === 'needs' || st === 'working' || st === 'done' ? st : 'rest'; };
+  const order = [...S.sessions.values()].sort((a, b) => (a.info.project === S.project ? 0 : 1) - (b.info.project === S.project ? 0 : 1));
+  const multi = new Set(order.map((s) => s.info.project)).size > 1;
+  $('#sessionList').replaceChildren(...GROUPS.flatMap(([g, label]) => {
+    const items = order.filter((s) => groupOf(s) === g);
+    if (!items.length) return [];
+    return [
+      el('div', { className: 'sgroup' }, el('span', { textContent: label }), el('span', { className: 'n', textContent: String(items.length) })),
+      ...items.map((s) => {
+        const st = statusOf(s);
+        const idx = list.indexOf(s);
+        const r = el('button', {
+          className: `srow ${st}` + (s.info.id === S.active ? ' on' : ''),
+          title: `${s.info.name} · ${base(s.info.project)} · ${rowMeta(s)}${idx >= 0 && idx < 9 ? ` · Ctrl+${idx + 1}` : ''}`,
+        },
+        tile(s),
+        el('span', { className: 'lab' },
+          el('span', { className: 'nm', textContent: s.info.name }),
+          multi || s.info.isolated ? el('span', { className: 'pj', textContent: base(s.info.project) + (s.info.isolated ? ' · own branch' : '') }) : null),
+        el('span', { className: 'r', textContent: rowMeta(s) }));
+        r.onclick = () => (s.info.project === S.project ? activate(s.info.id) : enterProject(s.info.project).then(() => activate(s.info.id)));
+        r.ondblclick = () => s.info.project === S.project && startRename(s, r.querySelector('.nm'));
+        r.oncontextmenu = (e) => { e.preventDefault(); tabMenu(s, e.clientX, e.clientY, r.querySelector('.nm')); };
+        return r;
+      }),
+    ];
+  }));
+  if (!S.sessions.size) $('#sessionList').append(el('div', { className: 'empty-list', textContent: 'No sessions yet. Ctrl+T starts one.' }));
   $('#noSession').hidden = list.length > 0 && !!S.active;
   if (!S.active || !S.sessions.has(S.active)) for (const x of S.sessions.values()) x.el.hidden = true;
 
   const all = [...S.sessions.values()];
   const here = all.filter((s) => s.info.project === S.project);
-  const running = here.filter((s) => s.info.running && s.info.status !== 'paused').length;
-  const elsewhere = all.filter((s) => s.info.project !== S.project && s.info.running && s.info.status !== 'paused').length;
   const needs = all.filter((s) => s.info.status === 'needs').length; // counts every project: you want to know
-  $('#sbSessions').textContent = `${running} running · ${here.length} session${here.length === 1 ? '' : 's'}${elsewhere ? ` · ${elsewhere} running in other projects` : ''}`;
-  $('#sbNeeds').textContent = needs ? `${needs} need${needs > 1 ? '' : 's'} you` : '';
-  document.title = needs ? `(${needs}) meta` : 'meta';
+  const busy = here.filter((s) => s.info.status === 'working' || s.info.status === 'needs').length;
+  $('#sbSessions').textContent = `${here.length} session${here.length === 1 ? '' : 's'} open${busy ? ` · ${busy} working` : ''}`;
+  $('#needsBadge').textContent = String(needs);
+  $('#needsBadge').hidden = !needs;
+  document.title = needs ? `(${needs}) Tando` : 'Tando';
+  renderHead();
+  renderInspector();
+  renderFooter();
 }
 
 // =============================================================== files
@@ -278,7 +371,7 @@ function renderTree() {
       const path = prefix + name;
       const isOpen = openDirs.has(path);
       const row = el('button', { className: 'row dir' },
-        el('span', { className: 'chev', textContent: isOpen ? '▾' : '▸' }),
+        el('span', { className: 'chev', innerHTML: `<svg class="chev-i${isOpen ? ' open' : ''}" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>` }),
         el('span', { className: 'name', textContent: name }),
         !isOpen && dirHasChange(path + '/') ? el('span', { className: 'cdot' }) : null);
       row.style.paddingLeft = `${14 + depth * 14}px`;
@@ -305,7 +398,8 @@ function renderTree() {
   walk(buildTree(S.files), 0, '');
   $('#tree').replaceChildren(frag);
   const n = [...S.changed.keys()].filter(changeOf).length;
-  $('#changedCount').textContent = n ? `${n} changed` : '';
+  $('#changedCount').textContent = n ? String(n) : '';
+  $('#changedCount').title = n ? `${n} file${n === 1 ? '' : 's'} changed recently` : '';
 }
 
 function fileMenu(f, x, y) {
@@ -360,7 +454,7 @@ function loadMonaco() {
       // which Markdown code blocks (colorize) also use. setTheme() alone doesn't.
       codeEditor = m.editor.create($('#codeView'), {
         readOnly: true, automaticLayout: true, minimap: { enabled: false }, theme: C.monacoTheme(),
-        fontFamily: '"Cascadia Code", Consolas, monospace', fontSize: 13, scrollBeyondLastLine: false,
+        fontFamily: '"JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace', fontSize: 13, scrollBeyondLastLine: false,
         renderLineHighlight: 'none', domReadOnly: true,
       });
       codeEditor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => C.save());
@@ -409,6 +503,7 @@ function openPanel(name, title, meta) {
 function showReader(show) {
   $('#reader').hidden = !show;
   $('#resizer').hidden = !show;
+  document.body.classList.toggle('reading', !!show);
   if (!show) { S.open = null; renderTree(); }
   const s = S.sessions.get(S.active);
   requestAnimationFrame(() => { try { s?.fit.fit(); } catch { /* ignore */ } });
@@ -477,7 +572,7 @@ async function renderMarkdown(data, keepScroll, preview = false) {
   if (blocks.length) {
     window.mermaid.initialize({
       startOnLoad: false, theme: C.mermaidTheme(), securityLevel: 'strict',
-      themeVariables: { background: '#0E0F12', primaryColor: '#1E2128', primaryBorderColor: '#F28C4B', primaryTextColor: '#E6E8EE', lineColor: '#9AA1B2', fontFamily: 'Segoe UI, sans-serif' },
+      themeVariables: { background: '#151417', primaryColor: '#242328', primaryBorderColor: '#4E8EF7', primaryTextColor: '#F2F1F3', lineColor: '#A3A1A8', fontFamily: 'Inter Variable, Segoe UI, sans-serif' },
     });
     let n = 0;
     for (const b of blocks) {
@@ -554,7 +649,7 @@ async function openDiff({ path: p, before, after, meta, onRevert }) {
   pane('diff');
   diffEditor ??= m.editor.createDiffEditor($('#diffView'), {
     readOnly: true, automaticLayout: true, minimap: { enabled: false }, theme: C.monacoTheme(), renderSideBySide: false,
-    fontFamily: '"Cascadia Code", Consolas, monospace', fontSize: 13, scrollBeyondLastLine: false, originalEditable: false,
+    fontFamily: '"JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace', fontSize: 13, scrollBeyondLastLine: false, originalEditable: false,
   });
   const old = diffEditor.getModel();
   const lang = langFor(p);
@@ -577,7 +672,7 @@ function scheduleChanges() { clearTimeout(changesTimer); changesTimer = setTimeo
 async function renderChanges() {
   const s = S.sessions.get(S.active);
   const box = $('#changeList');
-  if (!s || s.info.kind !== 'claude') { box.replaceChildren(el('div', { className: 'row muted', textContent: 'Pick a Claude tab' })); $('#changesCount').textContent = ''; return; }
+  if (!s || s.info.kind !== 'claude') { box.replaceChildren(el('div', { className: 'empty-list', textContent: 'Files a Claude session edits show up here, with a diff and undo.' })); $('#changesCount').textContent = ''; return; }
   let list = [];
   try { list = await api.changes(s.info.id); } catch { /* ignore */ }
   $('#changesCount').textContent = list.length ? String(list.length) : '';
@@ -741,6 +836,7 @@ async function refreshGit() {
     sum.textContent = `${gitState.branch}${n ? ` · ${n} changed` : ' · clean'}${gitState.ahead ? ` · ${gitState.ahead} to push` : ''}`;
   }
   if (!$('#gitView').hidden) renderGit();
+  renderInspector();
 }
 
 function openGit() {
@@ -1041,16 +1137,26 @@ function renderTokens() {
   $('#sbTokens').textContent = `today ${fmt(t.today.total)} tok · last 5h ${fmt(t.window5h.total)}`;
   const active = S.sessions.get(S.active);
   const mine = active ? t.bySession[active.info.claudeId] : null;
-  const rows = [
-    ['Today', t.today.total, `${t.today.replies} replies`],
-    ['Last 5 hours', t.window5h.total, null],
+  // The inspector shows this session's usage; the sidebar footer carries the overall totals.
+  const rows = mine ? [
+    ['Tokens', mine.total, null],
+    ['Output', mine.output, null],
     ['Cache reads today', t.today.cacheRead, null],
-    mine ? [`This session`, mine.total, `${fmt(mine.output)} out`] : null,
-  ].filter(Boolean);
+  ] : [];
+  // No session usage (e.g. a PowerShell tab): hide the block rather than show a global figure.
+  $('#tokenPanel').previousElementSibling.hidden = !rows.length;
   $('#tokenPanel').replaceChildren(...rows.flatMap(([k, v, sub]) => [
-    el('span', {}, k, sub ? el('span', { className: 'sub', textContent: ` · ${sub}` }) : null),
+    el('span', {}, k, sub ? el('span', { className: 'sub', textContent: `· ${sub}` }) : null),
     el('span', { className: 'v', textContent: fmt(v) }),
   ]));
+  // Usage under the sidebar. Plain numbers: Claude doesn't publish the plan's limit, so a
+  // percentage bar would be invented.
+  $('#sideMeter').replaceChildren(
+    el('span', { textContent: 'Last 5h' }), el('b', { textContent: fmt(t.window5h.total) }),
+    el('span', { className: 'spacer' }),
+    el('span', { textContent: 'Today' }), el('b', { textContent: fmt(t.today.total) }));
+  $('#sideMeter').title = 'Tokens from Claude\'s own logs: input + output + cache writes';
+  renderInspector();
 }
 
 async function refreshTokens() {
@@ -1093,7 +1199,7 @@ async function enterProject(dir, alreadySet = false) {
 
 function showStart(recent) {
   $('#start').hidden = false;
-  $('#projectName').textContent = 'meta';
+  $('#projectName').textContent = 'Tando';
   $('#recentList').replaceChildren(...recent.map((p) => {
     const b = el('button', {}, el('span', { textContent: base(p) }), el('span', { className: 'rp', textContent: p }));
     b.onclick = () => enterProject(p);
@@ -1104,15 +1210,35 @@ function showStart(recent) {
 
 // =============================================================== wiring
 
+const compact = () => window.innerWidth <= 900;
+const refit = () => requestAnimationFrame(() => { try { S.sessions.get(S.active)?.fit.fit(); } catch { /* ignore */ } });
+
 function toggleSidebar() {
-  $('#sidebar').classList.toggle('hidden');
-  try { S.sessions.get(S.active)?.fit.fit(); } catch { /* ignore */ }
+  // Half-screen: the sidebar is already a strip of status tiles, so Ctrl+B opens it as an overlay.
+  if (compact()) document.body.classList.toggle('side-overlay');
+  else $('#sidebar').classList.toggle('hidden');
+  refit();
+}
+
+function setSideView(view) {
+  for (const b of $('#sideSeg').children) b.classList.toggle('on', b.dataset.view === view);
+  for (const v of document.querySelectorAll('#sidebar .side-view')) v.hidden = v.dataset.view !== view;
+  store.set('meta.sideView', view);
+  if ($('#sidebar').classList.contains('hidden')) { $('#sidebar').classList.remove('hidden'); refit(); }
+  if (compact()) document.body.classList.toggle('side-overlay', view !== 'sessions' || !document.body.classList.contains('side-overlay'));
+}
+
+function toggleInspector() {
+  if (window.innerWidth <= 1280) document.body.classList.toggle('insp-on');
+  else document.body.classList.toggle('insp-off');
+  $('#inspToggle').classList.toggle('on', !document.body.classList.contains('insp-off'));
+  refit();
 }
 
 function renameActive() {
   const s = S.sessions.get(S.active);
-  const tab = $('#tabs .tab.active');
-  if (s && tab) startRename(s, tab);
+  const nm = $('#sessHead .nm');
+  if (s && nm) startRename(s, nm);
 }
 
 function onKey(e) {
@@ -1147,6 +1273,8 @@ function onKey(e) {
   if (e.shiftKey && k === 'p') return openSnippetPicker();
   if (e.shiftKey && k === 'h') return C.openHistory();
   if (e.shiftKey && k === ' ') return X.voice();
+  if (e.shiftKey && k === 'i') return toggleInspector();
+  if (k === 'j') return nextNeeding();
   if (k === 't') return newSession(e.shiftKey ? 'shell' : 'claude');
   if (k === 'w') return S.active && closeSession(S.active);
   if (k === 'p') return S.project && openQuick('open');
@@ -1161,6 +1289,10 @@ function onKey(e) {
 }
 
 async function boot() {
+  // xterm measures the font when a terminal opens, so make sure the bundled mono face is ready.
+  try { await Promise.all([document.fonts.load('13px "JetBrains Mono Variable"'), document.fonts.load('13px "Inter Variable"')]); } catch { /* fall back to system fonts */ }
+  // Re-measure every terminal once all faces are in, so rows never overflow into the footer.
+  document.fonts.ready.then(() => { for (const s of S.sessions.values()) { try { if (s.term.element) { s.term.options.fontFamily = s.term.options.fontFamily; s.fit.fit(); } } catch { /* ignore */ } } });
   F = initFeatures({
     S, api, $, el, toast, store, base,
     newSession, openQuick, openSearch, openGit, openSnippetPicker, openSnippetManager, openTimeline, openQueue,
@@ -1179,6 +1311,22 @@ async function boot() {
   document.addEventListener('pointerdown', (e) => { if (!$('#menu').hidden && !$('#menu').contains(e.target)) hideMenu(); });
   $('#newClaude').onclick = () => newSession('claude');
   $('#emptyNew').onclick = () => newSession('claude');
+  $('#emptyIsolated').onclick = () => F.newIsolated?.() ?? F.openPalette();
+  $('#sideToggle').onclick = toggleSidebar;
+  $('#inspToggle').onclick = toggleInspector;
+  $('#inspToggle').classList.add('on');
+  for (const b of $('#sideSeg').children) b.onclick = () => setSideView(b.dataset.view);
+  setSideView(store.get('meta.sideView', 'sessions'));
+  document.body.classList.remove('side-overlay');
+  $('#actAllow').onclick = () => answer('1');
+  $('#actAlways').onclick = () => answer('2');
+  $('#actDeny').onclick = () => answer('\x1b');
+  $('#actNext').onclick = nextNeeding;
+  $('#actOpen').onclick = () => S.project && openQuick('open');
+  $('#actPalette').onclick = () => F.openPalette();
+  // Clicking a session in the half-screen overlay closes the overlay again.
+  $('#sessionList').addEventListener('click', (e) => { if (compact() && e.target.closest('.srow')) document.body.classList.remove('side-overlay'); });
+  window.addEventListener('resize', () => { if (!compact()) document.body.classList.remove('side-overlay'); });
   $('#newMenuBtn').onclick = newMenu;
   $('#projectBtn').onclick = projectMenu;
   $('#openFolder').onclick = pickFolder;
@@ -1209,11 +1357,12 @@ async function boot() {
     const once = s.term.onData(() => { once.dispose(); s.term.reset(); attach(s); });
     renderSessions();
   });
-  api.onStatus(({ id, status }) => {
+  api.onStatus(({ id, status, message }) => {
     const s = S.sessions.get(id);
     if (!s) return;
     const prev = s.info.status;
     s.info.status = status;
+    s.info.statusMsg = status === 'needs' ? String(message || '') : '';
     if (status !== 'paused') { s.info.running = true; s.info.asleep = false; }
     F.status(id, status, prev);
     X.statusChanged();

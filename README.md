@@ -1,6 +1,6 @@
-﻿# meta-cli
+# meta-cli
 
-## meta IDE (desktop)
+## Tando (desktop IDE)
 
 A terminal-first desktop app around Claude Code: Claude session tabs, a live file
 tree, a Markdown reader with Mermaid diagrams and copy buttons, a code viewer,

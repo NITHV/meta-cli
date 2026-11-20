@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Tando mark: two sessions running in tandem; the dot is the one that wants you. -->
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="#1B1A1E"/>
+  <rect x="2.5" y="2.5" width="59" height="59" rx="14.5" fill="none" stroke="#FFFFFF" stroke-opacity=".14"/>
+  <rect x="17" y="14" width="11" height="36" rx="5.5" fill="#F2F1F3"/>
+  <rect x="36" y="27" width="11" height="23" rx="5.5" fill="#F2F1F3"/>
+  <circle cx="41.5" cy="17.5" r="5.5" fill="#4E8EF7"/>
+</svg>

@@ -1,4 +1,4 @@
-// Renders the meta logo to PNGs with an offscreen Electron window and packs them into
+// Renders the Tando mark (renderer/mark.svg) to PNGs with an offscreen Electron window and packs them into
 // renderer/icon.ico (PNG-compressed ICO, supported since Windows Vista) + renderer/icon.png.
 // Run: node_modules\electron\dist\electron.exe tools\make-icon.js
 'use strict';
@@ -7,10 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const SIZES = [256, 64, 48, 32, 16];
-const svg = (s) => `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 64 64">
-  <rect x="2" y="2" width="60" height="60" rx="15" fill="#F28C4B"/>
-  <text x="32" y="45" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-weight="700" font-size="38" fill="#1A0F08">m</text>
-</svg>`;
+const svg = (s) => fs.readFileSync(path.join(__dirname, '..', 'renderer', 'mark.svg'), 'utf8').replace('<svg ', `<svg width="${s}" height="${s}" `);
 
 app.whenReady().then(async () => {
   // Render once at 256 px, then scale down for the smaller sizes.

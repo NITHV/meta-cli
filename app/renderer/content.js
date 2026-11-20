@@ -3,16 +3,16 @@
 
 const THEMES = {
   dark: {
-    term: { background: '#0E0F12', foreground: '#D4D8E1', cursor: '#F28C4B', cursorAccent: '#0E0F12', selectionBackground: '#3A2A1E' },
-    titlebar: ['#16181D', '#9AA1B2'], monaco: 'meta', mermaid: 'dark',
+    term: { background: '#111013', foreground: '#DCDBDF', cursor: '#F2F1F3', cursorAccent: '#111013', selectionBackground: '#2F3A52' },
+    titlebar: ['#1B1A1E', '#B2B0B7'], monaco: 'meta', mermaid: 'dark',
   },
   light: {
     term: {
-      background: '#FBFBFC', foreground: '#1D2330', cursor: '#C2410C', cursorAccent: '#FBFBFC', selectionBackground: '#FBD9C5',
-      black: '#1D2330', red: '#B91C1C', green: '#15803D', yellow: '#A16207', blue: '#1D4ED8', magenta: '#7E22CE', cyan: '#0E7490', white: '#6B7385',
-      brightBlack: '#4A5263', brightRed: '#DC2626', brightGreen: '#16A34A', brightYellow: '#CA8A04', brightBlue: '#2563EB', brightMagenta: '#9333EA', brightCyan: '#0891B2', brightWhite: '#1D2330',
+      background: '#FFFFFF', foreground: '#2A292E', cursor: '#1D1C20', cursorAccent: '#FFFFFF', selectionBackground: '#CFE0FF',
+      black: '#2A292E', red: '#C62F35', green: '#1E8A4C', yellow: '#A16207', blue: '#2F6FE4', magenta: '#8E3BB8', cyan: '#0E7490', white: '#6A6870',
+      brightBlack: '#55535A', brightRed: '#E5484D', brightGreen: '#16A34A', brightYellow: '#CA8A04', brightBlue: '#3B82F6', brightMagenta: '#A855F7', brightCyan: '#0891B2', brightWhite: '#1D1C20',
     },
-    titlebar: ['#FFFFFF', '#4A5263'], monaco: 'meta-light', mermaid: 'default',
+    titlebar: ['#F7F6F8', '#55535A'], monaco: 'meta-light', mermaid: 'default',
   },
   contrast: {
     term: { background: '#000000', foreground: '#FFFFFF', cursor: '#FFB000', cursorAccent: '#000000', selectionBackground: '#5A4400' },
@@ -310,7 +310,8 @@ export function init(ctx) {
     const line = $('#statsLine');
     if (!s || s.info.kind !== 'claude') { line.textContent = ''; return; }
     const st = await api.sessionStats(s.info.claudeId).catch(() => null);
-    line.textContent = st ? `${st.prompts} prompts · ${st.tools} tool calls · ${st.minutes} min` : 'No conversation yet';
+    const n = (k, word) => `${k} ${word}${k === 1 ? '' : 's'}`;
+    line.textContent = st ? `${n(st.prompts, 'prompt')} · ${n(st.tools, 'tool call')} · ${st.minutes} min` : 'No conversation yet';
   }
 
   // ------------------------------------------------------------ hooks

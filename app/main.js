@@ -1,8 +1,11 @@
-// meta IDE main process: owns the window, every terminal session (node-pty),
+// Tando main process: owns the window, every terminal session (node-pty),
 // the project file list + watcher, Markdown rendering, Claude status hooks
 // and the token tracker. The window only renders what this sends it.
 'use strict';
 const { app, BrowserWindow, ipcMain, dialog, protocol, net, shell, clipboard, Notification } = require('electron');
+// Chromium stops drawing a window it believes is covered; a window that opens behind another
+// app then stays blank until it is moved. Tando is one long-lived window, so turn that off.
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -126,7 +129,7 @@ function setStatus(id, status, message = '') {
   const l = live.get(id);
   if (!l || l.status === status) return;
   l.status = status;
-  send('session:status', { id, status });
+  send('session:status', { id, status, message });
   const s = state.sessions.find((x) => x.id === id);
   if (s) bus.emit('status', { session: s, status, message });
   const watching = win && win.isFocused() && state.active[s?.project] === id;
@@ -884,7 +887,10 @@ md.renderer.rules.fence = (tokens, i) => {
 };
 
 function renderMarkdown(src) {
-  return md.render(src)
+  // A BOM hides the first "# heading" from the parser, and with html:false an HTML comment
+  // would show as literal text: drop both before rendering.
+  const clean = src.replace(/^﻿/, '').replace(/<!--[\s\S]*?-->\n?/g, '');
+  return md.render(clean)
     .replace(/<li>(<p>)?\[ \] /g, '<li class="task">$1<input type="checkbox" disabled> ')
     .replace(/<li>(<p>)?\[[xX]\] /g, '<li class="task">$1<input type="checkbox" checked disabled> ');
 }
@@ -1007,16 +1013,24 @@ async function noStore(pending) {
 }
 
 function createWindow() {
+  // Set the native theme before the window exists: flipping it later re-draws the Mica layer
+  // over the page until the next resize (seen as a blank window in light mode).
+  const light = state?.settings?.theme === 'light';
+  require('electron').nativeTheme.themeSource = light ? 'light' : 'dark';
   win = new BrowserWindow({
     width: 1440,
     height: 900,
-    minWidth: 760,
+    minWidth: 600, // half of a 1366 px laptop screen still fits (sidebar collapses to tiles)
     minHeight: 480,
-    backgroundColor: '#0E0F12',
-    title: 'meta',
+    // Dark: transparent so Windows 11 Mica shows through the sidebar. Light: solid, because with
+    // Mica in light mode the page stays hidden behind the material at launch.
+    backgroundColor: light ? '#F7F6F8' : '#00000000',
+    backgroundMaterial: light ? 'none' : 'mica',
+    title: 'Tando',
     icon: path.join(APP_DIR, 'renderer', 'icon.png'),
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#16181D', symbolColor: '#9AA1B2', height: 44 },
+    // 1px short so the toolbar's hairline runs under the buttons
+    titleBarOverlay: light ? { color: '#F7F6F8', symbolColor: '#55535A', height: 45 } : { color: '#1B1A1E', symbolColor: '#B2B0B7', height: 45 },
     webPreferences: { preload: path.join(APP_DIR, 'preload.js'), contextIsolation: true, sandbox: true },
   });
   win.removeMenu();
