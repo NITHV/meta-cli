@@ -213,6 +213,9 @@ body.insp-off #inspector, body.reading #inspector, body.focus #inspector { displ
 .codeblock:hover pre::-webkit-scrollbar-thumb { background: var(--line-strong); }
 .term .xterm-viewport::-webkit-scrollbar-thumb { background: transparent; border: 0; }
 .term:hover .xterm-viewport::-webkit-scrollbar-thumb { background: var(--line-strong); }
+/* Newer xterm draws its own scrollbar; keep it hidden until the pointer is over the terminal. */
+.term .xterm .scrollbar > .slider { background: transparent !important; transition: background-color .15s ease-out; }
+.term:hover .xterm .scrollbar > .slider { background: var(--line-strong) !important; }
 .chev-i { width: 10px; height: 10px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s var(--ease); }
 .chev-i.open { transform: rotate(90deg); }
 .term .xterm { height: 100%; }

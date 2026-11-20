@@ -266,7 +266,8 @@ function renderFooter() {
   const who = $('#sbNeeds');
   if (activeNeeds) {
     const msg = (s.info.statusMsg || '').replace(/^Claude\s+/i, '');
-    who.replaceChildren(tile(s, true), el('span', { textContent: `${s.info.name} ${perm ? 'needs your permission' : 'is waiting for you'}` }), msg && !perm ? el('span', { className: 'msg', textContent: `· ${msg}` }) : null);
+    // replaceChildren turns a null argument into the text "null", so drop the optional part instead.
+    who.replaceChildren(...[tile(s, true), el('span', { textContent: `${s.info.name} ${perm ? 'needs your permission' : 'is waiting for you'}` }), msg && !perm ? el('span', { className: 'msg', textContent: `· ${msg}` }) : null].filter(Boolean));
   } else if (needing.length) {
     who.replaceChildren(tile(needing[0], true), el('span', { textContent: needing.length === 1 ? `${needing[0].info.name} needs you` : `${needing.length} sessions need you` }));
   } else who.replaceChildren();
