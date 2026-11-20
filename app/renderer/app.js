@@ -1199,7 +1199,7 @@ async function enterProject(dir, alreadySet = false) {
 
 function showStart(recent) {
   $('#start').hidden = false;
-  $('#projectName').textContent = 'Tando';
+  $('#projectName').textContent = 'No folder';
   $('#recentList').replaceChildren(...recent.map((p) => {
     const b = el('button', {}, el('span', { textContent: base(p) }), el('span', { className: 'rp', textContent: p }));
     b.onclick = () => enterProject(p);

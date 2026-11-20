@@ -95,9 +95,12 @@ button.icon:hover { background: var(--sel); color: var(--text); }
 .tbtn.narrow svg { width: 12px; height: 12px; }
 .mark { width: 20px; height: 20px; background: url("mark.svg") center / contain no-repeat; flex: none; display: inline-block; }
 .mark.big { width: 44px; height: 44px; border-radius: 12px; }
-.project { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 7px; font-weight: 600; white-space: nowrap; max-width: 220px; }
+.mark.brand { margin: 0 4px 0 6px; }
+/* The open project reads as a folder chip, not as a product name next to the mark. */
+.project { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px 0 9px; border-radius: 7px; border: 1px solid var(--line-strong); background: var(--raised); font-weight: 500; font-size: 12.5px; white-space: nowrap; max-width: 220px; transition: border-color .15s var(--ease); }
+.project .fold { width: 14px; height: 14px; color: var(--text-2); fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .project #projectName { overflow: hidden; text-overflow: ellipsis; }
-.project:hover { background: var(--sel); }
+.project:hover { border-color: var(--faint); }
 .project .chev { width: 12px; height: 12px; color: var(--faint); }
 .seg.views { display: flex; padding: 2px; gap: 2px; border-radius: 8px; background: var(--raised); border: 1px solid var(--line); margin-left: 4px; overflow: visible; }
 .seg.views button { height: 26px; padding: 0 10px; border-radius: 6px; display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 12.5px; font-weight: 500; transition: background .15s var(--ease); }
@@ -487,6 +490,7 @@ body.focus #sidebar, body.focus #reader, body.focus #resizer, body.focus #status
   body:not(.side-overlay) .side-foot { display: none; }
   body.side-overlay #sidebar { position: absolute; left: 0; top: 0; bottom: 0; width: 288px; z-index: 14; background: var(--surface); box-shadow: var(--shadow-pop); }
   .project #projectName, .project .chev { display: none; }
+  .project { padding: 0 7px; }
   .sess-head .pj, .sess-head .chip.br { display: none; }
   #actAlways, #actNext .lbl { display: none; }
   #reader { position: absolute; inset: 0; width: auto !important; z-index: 13; }
