@@ -6,6 +6,15 @@ A terminal-first desktop app around Claude Code: Claude session tabs, a live fil
 tree, a Markdown reader with Mermaid diagrams and copy buttons, a code viewer,
 Ctrl+P quick open, status dots (working / needs you / done) and a token tracker.
 
+![A Claude session asks to edit a file. It sits under "Needs you" in the sidebar, and the footer answers it with Allow 1, Always 2 or Deny Esc.](docs/screenshots/needs-dark.png)
+
+| | |
+|---|---|
+| ![After the task, a diff of the file the session changed, with Undo changes.](docs/screenshots/changes-dark.png) | ![Light theme: a PowerShell session with passing tests, and the Markdown reader rendering a Mermaid diagram.](docs/screenshots/reader-light.png) |
+| Every file a session changed, as a diff with Undo. | Light theme, a PowerShell session and the Markdown reader. |
+
+<sub>Screenshots use a small demo repository; the account usage panel is hidden.</sub>
+
 ```powershell
 cd app; npm install --allow-scripts=electron; cd ..   # once
 meta ide                      # open the IDE on the current folder
