@@ -1,4 +1,4 @@
-// Claude Code hook -> meta IDE. Claude runs this on UserPromptSubmit / PreToolUse /
+// Claude Code hook -> Tando. Claude runs this on UserPromptSubmit / PreToolUse /
 // PostToolUse / Notification / Stop (see hooks.json, written by main.js). It forwards the
 // event to the IDE so the tab shows working / needs you / done, and so the IDE can
 // snapshot a file just before Claude edits it (that's how per-session diffs work).

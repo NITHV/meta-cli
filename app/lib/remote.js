@@ -53,7 +53,7 @@ function init(ctx) {
     const shareTok = u.pathname.startsWith('/s/') ? u.pathname.slice(3).split('/')[0] : (u.searchParams.get('s') || '');
     const shared = !full && shares.has(shareTok) ? shares.get(shareTok) : null;
     const json = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(obj)); };
-    if (!full && !shared) { res.writeHead(401, { 'content-type': 'text/plain' }); return res.end('Open the link shown in meta IDE.'); }
+    if (!full && !shared) { res.writeHead(401, { 'content-type': 'text/plain' }); return res.end('Open the link shown in Tando.'); }
     if (u.searchParams.has('t')) {
       res.writeHead(302, { 'set-cookie': `meta_phone=${phone.token}; HttpOnly; SameSite=Strict; Path=/`, location: '/' });
       return res.end();

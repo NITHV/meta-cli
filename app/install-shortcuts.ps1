@@ -3,7 +3,7 @@
 $ErrorActionPreference = 'Stop'
 $app = $PSScriptRoot
 $exe = Join-Path $app 'node_modules\electron\dist\electron.exe'
-if (-not (Test-Path $exe)) { throw "Electron isn't installed yet. Run: cd `"$app`"; npm install --allow-scripts=electron" }
+if (-not (Test-Path $exe)) { throw "Electron isn't installed yet. Run: cd `"$app`"; npm install" }
 
 $shell = New-Object -ComObject WScript.Shell
 # Remove shortcuts left from the app's old name.
