@@ -56,7 +56,7 @@ function init(ctx) {
     const dir = s.isolated.dir;
     git(dir, ['add', '-A']);
     if (git(dir, ['status', '--porcelain']).trim()) {
-      git(dir, ['-c', 'user.name=meta-ide', '-c', 'user.email=meta-ide@localhost', 'commit', '-q', '-m', message]);
+      git(dir, ['-c', 'user.name=Tando', '-c', 'user.email=tando@localhost', 'commit', '-q', '-m', message]);
     }
     return git(s.project, ['diff', '--name-only', s.isolated.base, s.isolated.branch]).split('\n').filter(Boolean);
   }
@@ -88,14 +88,14 @@ function init(ctx) {
     const s = findSession(id);
     if (!s?.isolated) return null;
     let files = [];
-    try { commitWorktree(s, `meta-ide: ${s.name}`); files = git(s.project, ['diff', '--name-only', s.isolated.base, s.isolated.branch]).split('\n').filter(Boolean); } catch { /* ignore */ }
+    try { commitWorktree(s, `Tando: ${s.name}`); files = git(s.project, ['diff', '--name-only', s.isolated.base, s.isolated.branch]).split('\n').filter(Boolean); } catch { /* ignore */ }
     return { branch: s.isolated.branch, files };
   });
 
   ipcMain.handle('isolated:apply', async (_e, id) => {
     const s = findSession(id);
     if (!s?.isolated) throw new Error('not an isolated session');
-    const files = commitWorktree(s, `meta-ide: ${s.name}`);
+    const files = commitWorktree(s, `Tando: ${s.name}`);
     if (!files.length) throw new Error('this session has no changes to apply');
     try { git(s.project, ['merge', '--squash', s.isolated.branch]); } catch (e) { throw errOf(e); }
     await removeIsolated(s);
@@ -112,7 +112,7 @@ function init(ctx) {
   ipcMain.handle('isolated:pr', async (_e, id) => {
     const s = findSession(id);
     if (!s?.isolated) throw new Error('not an isolated session');
-    const files = commitWorktree(s, `meta-ide: ${s.name}`);
+    const files = commitWorktree(s, `Tando: ${s.name}`);
     if (!files.length) throw new Error('nothing to put in a PR yet');
     const env = ctx.cleanEnv();
     try { git(s.isolated.dir, ['push', '-u', 'origin', s.isolated.branch], { env }); } catch (e) { throw errOf(e); }

@@ -1,11 +1,16 @@
 {
   "name": "meta-ide",
-  "version": "0.1.0",
+  "productName": "Tando",
+  "version": "0.2.0",
   "private": true,
   "description": "Tando: a terminal-first desktop app for running several coding-agent sessions side by side",
+  "author": "NITHV",
+  "homepage": "https://github.com/NITHV/meta-cli",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never",
+    "pack": "electron-builder --win --dir --publish never"
   },
   "license": "MIT",
   "dependencies": {
@@ -14,10 +19,85 @@
     "@lydell/node-pty": "1.2.0-beta.18",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
+    "markdown-it": "15.0.3"
+  },
+  "devDependencies": {
     "electron": "45.3.4",
-    "highlight.js": "11.12.0",
-    "markdown-it": "15.0.3",
+    "electron-builder": "^26.18.0",
     "mermaid": "12.3.0",
     "monaco-editor": "0.57.0"
+  },
+  "allowScripts": {
+    "electron@45.3.4": true,
+    "electron-winstaller": false
+  },
+  "build": {
+    "appId": "com.nithv.tando",
+    "productName": "Tando",
+    "copyright": "MIT License, NITHV",
+    "asar": false,
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "hook.js",
+      "lib/**",
+      "renderer/**",
+      "package.json",
+      "!**/*.map",
+      {
+        "from": "node_modules/mermaid/dist",
+        "to": "node_modules/mermaid/dist",
+        "filter": [
+          "mermaid.min.js"
+        ]
+      },
+      {
+        "from": "node_modules/monaco-editor/min",
+        "to": "node_modules/monaco-editor/min",
+        "filter": [
+          "**/*",
+          "!**/*.map"
+        ]
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "../bin",
+        "to": "bin"
+      },
+      {
+        "from": "../src",
+        "to": "src"
+      },
+      {
+        "from": "../package.json",
+        "to": "package.json"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "renderer/icon.ico",
+      "artifactName": "Tando-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Tando",
+      "uninstallDisplayName": "Tando"
+    }
   }
 }

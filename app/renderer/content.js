@@ -254,6 +254,7 @@ export function init(ctx) {
     for (const s of S.sessions.values()) s.term.options.theme = { ...ctx.baseTermTheme, ...t.term };
     window.monaco?.editor.setTheme(t.monaco);
     api.titlebarTheme(...t.titlebar);
+    if (S.open?.isMd && S.open.mode === 'read') ctx.openFile(S.open.path); // redraw diagrams in the new colors
   }
   async function pickTheme() {
     ctx.F.openPicker({

@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('meta', {
   state: () => ipcRenderer.invoke('state:get'),
   openFolder: () => ipcRenderer.invoke('project:pick'),
   setProject: (dir) => ipcRenderer.invoke('project:set', dir),
+  setupCheck: () => ipcRenderer.invoke('setup:check'),
 
   createSession: (opts) => ipcRenderer.invoke('session:create', opts),
   attach: (id, cols, rows) => ipcRenderer.invoke('session:attach', id, cols, rows),
@@ -121,6 +122,7 @@ contextBridge.exposeInMainWorld('meta', {
   onExit: on('pty:exit'),
   onStatus: on('session:status'),
   onFocusSession: on('session:focus'),
+  onProjectOpened: on('project:opened'),
   onFsChanged: on('fs:changed'),
   onTokens: on('tokens:update'),
   onChanges: on('changes:update'),

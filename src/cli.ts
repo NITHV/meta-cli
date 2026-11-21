@@ -232,13 +232,13 @@ function cmdDiscard(ref: string): number {
 function openIde(dir?: string): number {
   const appDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'app');
   const exe = join(appDir, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
-  if (!existsSync(exe)) throw new Error(`the IDE isn't installed yet: run npm install in ${appDir}`);
+  if (!existsSync(exe)) throw new Error(`Tando isn't installed yet: run npm install in ${appDir}`);
   const target = resolve(dir ?? process.cwd());
   if (!existsSync(target)) throw new Error(`no such folder: ${target}`);
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   spawn(exe, [appDir, target], { detached: true, stdio: 'ignore', env }).unref();
-  console.log(dim(`opening meta IDE on ${target}`));
+  console.log(dim(`opening Tando on ${target}`));
   return 0;
 }
 

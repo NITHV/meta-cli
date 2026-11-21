@@ -571,9 +571,18 @@ async function renderMarkdown(data, keepScroll, preview = false) {
   }
   const blocks = [...view.querySelectorAll('.mermaid-src')];
   if (blocks.length) {
+    // Diagram colors come from the live theme tokens, so light and high contrast match the reader.
+    const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     window.mermaid.initialize({
-      startOnLoad: false, theme: C.mermaidTheme(), securityLevel: 'strict',
-      themeVariables: { background: '#151417', primaryColor: '#242328', primaryBorderColor: '#4E8EF7', primaryTextColor: '#F2F1F3', lineColor: '#A3A1A8', fontFamily: 'Inter Variable, Segoe UI, sans-serif' },
+      startOnLoad: false, theme: 'base', securityLevel: 'strict',
+      themeVariables: {
+        darkMode: tok('color-scheme') !== 'light',
+        background: tok('--base'), mainBkg: tok('--raised'), primaryColor: tok('--raised'), secondaryColor: tok('--surface'), tertiaryColor: tok('--surface'),
+        primaryBorderColor: tok('--line-strong'), nodeBorder: tok('--line-strong'), clusterBkg: tok('--surface'), clusterBorder: tok('--line'),
+        primaryTextColor: tok('--text'), textColor: tok('--text'), lineColor: tok('--muted'),
+        edgeLabelBackground: tok('--base'), labelBackground: tok('--base'),
+        fontFamily: 'Inter Variable, Segoe UI, sans-serif', fontSize: '14px',
+      },
     });
     let n = 0;
     for (const b of blocks) {
@@ -1206,7 +1215,7 @@ function showStart(recent) {
     b.onclick = () => enterProject(p);
     return b;
   }));
-  if (recent.length) $('#recentList').prepend(el('div', { className: 'side-head', textContent: 'RECENT' }));
+  if (recent.length) $('#recentList').prepend(el('div', { className: 'side-head', textContent: 'Recent' }));
 }
 
 // =============================================================== wiring
@@ -1287,6 +1296,26 @@ function onKey(e) {
     return n && activate(n.info.id);
   }
   if (/^[1-9]$/.test(k)) { const n = list[Number(k) - 1]; return n && activate(n.info.id); }
+}
+
+// A new machine may lack the tools Tando drives. Say what's missing and why, on both empty screens.
+const SETUP = [
+  ['claude', 'Claude Code', 'runs every session', 'https://claude.com/claude-code'],
+  ['node', 'Node.js', 'reports each session\'s status', 'https://nodejs.org/en/download'],
+  ['git', 'Git', 'powers changes, isolated sessions and source control', 'https://git-scm.com/downloads/win'],
+];
+async function renderSetup() {
+  let have;
+  try { have = await api.setupCheck(); } catch { return; }
+  const missing = SETUP.filter(([k]) => !have[k]);
+  for (const ul of document.querySelectorAll('[data-setup]')) {
+    ul.hidden = !missing.length;
+    ul.replaceChildren(...missing.map(([, name, why, url]) => el('li', {},
+      el('span', { className: 'setup-dot', ariaHidden: 'true' }),
+      el('span', {}, el('b', { textContent: `${name} not found` }), ` · it ${why}. `),
+      el('a', { href: url, target: '_blank', textContent: 'Install' }))));
+    if (missing.length) ul.prepend(el('li', { className: 'setup-head', textContent: 'Before you start' }));
+  }
 }
 
 async function boot() {
@@ -1390,6 +1419,7 @@ async function boot() {
     X.filesChanged(touched);
   });
   api.onTokens((t) => { S.tokens = t; renderTokens(); });
+  api.onProjectOpened((dir) => { enterProject(dir, true); });
   api.onAppError((msg) => toast(`Something went wrong (logged to error.log): ${msg}`));
   api.onChanges(({ id }) => { if (id === S.active) { scheduleChanges(); renderTimeline(); } });
   api.onQueue((q) => { queue = q; renderQueue(); });
@@ -1443,6 +1473,7 @@ async function boot() {
   $('#queueStart').onclick = () => api.queueStart();
   $('#queueStop').onclick = () => api.queueStop();
 
+  renderSetup();
   const st = await api.state();
   S.recent = st.recent;
   if (st.project) await enterProject(st.project, true);

@@ -10,7 +10,7 @@ web
 
 ## Users
 
-One person: the author, an SRE who builds side projects by directing coding agents. They keep 3–5 agent sessions running at once across several repos, at a laptop, both in daytime and late at night. The portfolio page only shows the app off; it is not built for other users.
+One person: the author, an SRE who builds side projects by directing coding agents. They keep 3–5 agent sessions running at once across several repos, at a laptop, both in daytime and late at night. Since v0.2 the app also ships as a Windows installer from GitHub Releases, so a visitor from the portfolio may install it: a fresh machine must get a clear first run (what's missing, how to fix it) without reading the README.
 
 ## Product Purpose
 
@@ -35,7 +35,7 @@ Real agent terminals (not a chat imitation) are the main screen, wrapped with wh
 - Windows first; keep RAM use low.
 - Zero cost: no paid APIs; LLM features run through the user's Claude subscription.
 - Must work in both a bright daytime room and a dark room at night.
-- Undecided: the product name (currently "meta IDE"; replacement to be chosen).
+- Name: Tando (chosen 2026-11-20; replaced "meta IDE").
 
 ## Brand Commitments
 

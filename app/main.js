@@ -18,6 +18,45 @@ const MarkdownIt = require('markdown-it');
 
 const APP_DIR = __dirname;
 let win = null;
+
+// ---------------------------------------------------------------- identity
+// Windows names a toast after the Start-menu shortcut whose AppUserModelID matches the app's.
+// Without one it shows "Electron". The installer (electron-builder, same appId) makes that
+// shortcut; a run from source makes its own below.
+const APP_ID = 'com.nithv.tando';
+app.setName('Tando');
+// Settings live in %APPDATA%\Tando. Older builds used %APPDATA%\meta-ide: move it over once.
+{
+  const appData = app.getPath('appData');
+  const dir = path.join(appData, 'Tando');
+  const old = path.join(appData, 'meta-ide');
+  let use = dir;
+  if (app.commandLine.hasSwitch('user-data-dir')) use = app.getPath('userData'); // a throwaway profile (screenshots, tests)
+  else if (!fs.existsSync(dir) && fs.existsSync(old)) {
+    try { fs.renameSync(old, dir); } catch { use = old; } // locked by a running old build: keep using it
+  }
+  app.setPath('userData', use);
+}
+// One window per user: a second launch focuses the first (two hook servers would fight).
+if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
+
+function registerStartMenuShortcut() {
+  if (process.platform !== 'win32' || app.isPackaged) return;
+  const link = {
+    target: process.execPath,
+    args: `"${APP_DIR}"`,
+    cwd: APP_DIR,
+    description: 'Tando: coding-agent sessions side by side',
+    icon: path.join(APP_DIR, 'renderer', 'icon.ico'),
+    iconIndex: 0,
+    appUserModelId: APP_ID,
+  };
+  const startMenu = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Tando.lnk');
+  const desktop = path.join(app.getPath('desktop'), 'Tando.lnk');
+  try { shell.writeShortcutLink(startMenu, fs.existsSync(startMenu) ? 'update' : 'create', link); } catch { /* no Start menu: toasts say "Electron" */ }
+  // A Desktop shortcut from install-shortcuts.ps1 gets the same ID, so the taskbar groups it as Tando.
+  try { if (fs.existsSync(desktop)) shell.writeShortcutLink(desktop, 'update', link); } catch { /* leave it */ }
+}
 // Feature modules subscribe here ('start', 'status') and can add Claude CLI arguments.
 const bus = new (require('node:events'))();
 const claudeArgHooks = []; // (session) => string[]
@@ -138,6 +177,7 @@ function setStatus(id, status, message = '') {
       title: status === 'needs' ? `${s.name} needs you` : `${s.name} is done`,
       body: message || path.basename(s.project),
       silent: status === 'done',
+      icon: path.join(APP_DIR, 'renderer', 'icon.png'),
     });
     n.on('click', () => { if (!win) return; win.show(); win.focus(); send('session:focus', id); });
     n.show();
@@ -691,7 +731,8 @@ function spawnSession(s, cols, rows, prompt) {
   let file, args;
   if (s.kind === 'claude') {
     claudeExe ??= whichClaude();
-    if (!claudeExe) throw new Error('Claude Code was not found on PATH');
+    if (!claudeExe) claudeExe = whichClaude(); // installed while Tando was open
+    if (!claudeExe) throw new Error('Claude Code isn\'t installed or isn\'t on PATH. Install it from claude.com/claude-code, then try again.');
     file = claudeExe;
     args = ['--settings', HOOKS_FILE(), '--name', s.name];
     if (s.model && /^[\w.:-]+$/.test(s.model)) args.push('--model', s.model); // this session only
@@ -874,6 +915,13 @@ ipcMain.handle('project:pick', async () => {
   return state.project;
 });
 ipcMain.handle('project:set', (_e, dir) => { setProject(dir); return state.project; });
+// What a new machine is missing. Claude runs the sessions; Node runs the status hook;
+// Git powers changes, isolated sessions and source control.
+ipcMain.handle('setup:check', () => {
+  const found = (exe) => { try { execFileSync('where.exe', [exe], { stdio: 'ignore' }); return true; } catch { return false; } };
+  if (!claudeExe) claudeExe = whichClaude();
+  return { claude: !!claudeExe, node: found('node'), git: found('git') };
+});
 ipcMain.handle('fs:list', () => (state.project ? [...fileSet] : []));
 ipcMain.handle('fs:reveal', (_e, rel) => shell.showItemInFolder(inProject(rel)));
 
@@ -1056,7 +1104,8 @@ process.on('uncaughtException', (err) => {
 });
 
 app.whenReady().then(async () => {
-  app.setAppUserModelId('meta.ide'); // Windows notifications need this
+  app.setAppUserModelId(APP_ID);
+  registerStartMenuShortcut();
   loadState();
   writeHooksFile();
   await startHookServer();
@@ -1078,6 +1127,15 @@ require('./lib/workspace').init(featureCtx);
 require('./lib/content').init(featureCtx);
 require('./lib/devtools').init(featureCtx);
 require('./lib/remote').init(featureCtx);
+
+app.on('second-instance', (_e, argv) => {
+  if (!win) return;
+  // `meta ide D:\other` while Tando is open: switch the open window to that folder.
+  const arg = argv.slice(app.isPackaged ? 1 : 2).find((a) => !a.startsWith('-') && fs.existsSync(a));
+  if (arg) { setProject(arg); send('project:opened', state.project); }
+  if (win.isMinimized()) win.restore();
+  win.show(); win.focus();
+});
 
 app.on('window-all-closed', () => {
   for (const l of live.values()) { try { l.proc.kill(); } catch { /* gone */ } }
